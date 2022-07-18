@@ -1,2 +1,8 @@
 # InnopolisDS
-repo for the Data Science course
+
+### Структура репозитория:
+```bash
+.
+└── summer-finals # модели использованные в промежуточной аттестации 1
+    └── datasets  # датасеты аттестации 1
+```
