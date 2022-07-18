@@ -1,3 +1,10 @@
+# test model and misc
+scratch/
+
+# jupyter stuff
+.jukit/
+.ipynb_checkpoints/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
