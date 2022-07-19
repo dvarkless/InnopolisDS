@@ -1,5 +1,4 @@
 import math
-import warnings
 
 import numpy as np
 
@@ -16,12 +15,13 @@ class BaseModel:
 
         inputs:
             data_converter: Function - converter for input vectors
-            
+
             custom_params: dict - a dict object for children model's parameters
                                   use self.must_have_params() method to check parameter's 
                                   availability
 
     """
+
     def __init__(self, data_converter=None, custom_params=None) -> None:
         self._data = np.array([])
         self.data_converter = data_converter if data_converter else lambda x: x
@@ -42,22 +42,25 @@ class BaseModel:
     @property
     def data(self):    # Чтобы не вызывать функцию конвертации данных каждый раз
         return self._data   # когда нам надо конвертировать входные данные можно воспользоваться
-                            # таким способом
+        # таким способом
 
     @data.setter
     def data(self, input_data):
         data = np.array(list(map(self.data_converter, input_data)))
-        if getattr(self, 'normalize', False):
+        # Также здесь происходит нормализация
+        if getattr(self, 'normalization', False):
             std = np.std(data, axis=0)
             std[std == 0] = 1
-            self._data = (data - np.mean(data, axis=0)) / std   # Также здесь происходит нормализация
+            self._data = (data - np.mean(data, axis=0))/std   
         else:
             self._data = data
 
     @property
     def params(self) -> np.ndarray:
-        if math.isnan(self._params[0, 0]) or math.isinf(self._params[0, 0]):  # Проверяем происходило ли деление на ноль
-            raise ValueError(f"self.params is invalid \n {self._params}")     # или переполнение переменной
+        # Проверяем происходило ли деление на ноль
+        if math.isnan(self._params[0, 0]) or math.isinf(self._params[0, 0]):
+            # или переполнение переменной
+            raise ValueError(f"self.params is invalid \n {self._params}")
         return self._params
 
     @params.setter
@@ -70,7 +73,8 @@ class BaseModel:
 
     @cost.setter
     def cost(self, input_data):
-        if not hasattr(self, '_cost_list'):  # Сохраняем значения стоимости чтобы вывести график, если понадобится
+        # Сохраняем значения стоимости чтобы вывести график, если понадобится
+        if not hasattr(self, '_cost_list'):
             self._cost_list = []
         self._cost_list.append(input_data)
         self._cost = input_data
@@ -113,7 +117,8 @@ class BaseModel:
         np.putmask(log_val, log_val < -100, -100)
         add2 = (1 - y) * log_val
         out = -weight * (add1 + add2)
-        out.resize(sample_size, out.shape[1], refcheck=False)  # отключаем refcheck для работы дебаггера
+        # отключаем refcheck для работы дебаггера
+        out.resize(sample_size, out.shape[1], refcheck=False)
 
         if regularization == "l1":
             out += self.l1_reg(weight)
@@ -175,7 +180,7 @@ class BaseModel:
             Разделяет обучающий датасет EMNIST на ответы и входные значения
 
             также конвертирует и нормализует входные значения
-            
+
             input: 
                 train_data: np.ndarray - whole EMNIST dataset, first column is answers, 
                                          the rest is input
