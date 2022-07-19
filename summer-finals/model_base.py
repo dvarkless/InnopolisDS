@@ -15,11 +15,11 @@ class BaseModel:
                 super.__init__(self, kwargs)
 
         inputs:
-            data_converter: Function - функция-преобразователь для входных данных
+            data_converter: Function - converter for input vectors
             
-            custom_params: dict - словарь с гиперпараметрами моделей, чтобы проверить 
-                                  наличие обязательных параметров можно вызвать метод 
-                                  self.must_have_params()
+            custom_params: dict - a dict object for children model's parameters
+                                  use self.must_have_params() method to check parameter's 
+                                  availability
 
     """
     def __init__(self, data_converter=None, custom_params=None) -> None:
@@ -73,17 +73,17 @@ class BaseModel:
         self._cost = input_data
 
     def l1_reg(self, weight: int) -> np.ndarray:      # L1 regularization
-    """
-        L1 regularization
-        input - weight constant (0 < c < 1)
-    """
+        """
+            L1 regularization
+            input - weight constant (0 < c < 1)
+        """
         return weight * np.abs(self.params).sum(axis=0)
 
     def l2_reg(self, weight):      # L2 regularization
-    """
-        L2 regularization
-        input - weight constant (0 < c < 1)
-    """
+        """
+            L2 regularization
+            input - weight constant (0 < c < 1)
+        """
         return weight * np.sqrt(np.power(self.params, 2)).sum(axis=0)
 
     def BCEloss(self, y_pred, y, sample_size, weight=0.01, regularization=None) -> np.ndarray:
