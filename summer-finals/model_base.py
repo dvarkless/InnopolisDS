@@ -25,7 +25,7 @@ class BaseModel:
     def __init__(self, data_converter=None, custom_params=None) -> None:
         self._data = np.array([])
         self.data_converter = data_converter if data_converter else lambda x: x
-        self._params = None
+        self._params = np.array([])
 
         if custom_params:
             for key, val in custom_params.items():
@@ -47,12 +47,15 @@ class BaseModel:
     @data.setter
     def data(self, input_data):
         data = np.array(list(map(self.data_converter, input_data)))
-        std = np.std(data, axis=0)
-        std[std == 0] = 1
-        self._data = (data - np.mean(data, axis=0)) / std   # Также здесь происходит нормализация
+        if getattr(self, 'normalize', False):
+            std = np.std(data, axis=0)
+            std[std == 0] = 1
+            self._data = (data - np.mean(data, axis=0)) / std   # Также здесь происходит нормализация
+        else:
+            self._data = data
 
     @property
-    def params(self):
+    def params(self) -> np.ndarray:
         if math.isnan(self._params[0, 0]) or math.isinf(self._params[0, 0]):  # Проверяем происходило ли деление на ноль
             raise ValueError(f"self.params is invalid \n {self._params}")     # или переполнение переменной
         return self._params
@@ -72,14 +75,14 @@ class BaseModel:
         self._cost_list.append(input_data)
         self._cost = input_data
 
-    def l1_reg(self, weight: int) -> np.ndarray:      # L1 regularization
+    def l1_reg(self, weight: float) -> np.ndarray:      # L1 regularization
         """
             L1 regularization
             input - weight constant (0 < c < 1)
         """
         return weight * np.abs(self.params).sum(axis=0)
 
-    def l2_reg(self, weight):      # L2 regularization
+    def l2_reg(self, weight: float) -> np.ndarray:      # L2 regularization
         """
             L2 regularization
             input - weight constant (0 < c < 1)
@@ -110,7 +113,7 @@ class BaseModel:
         np.putmask(log_val, log_val < -100, -100)
         add2 = (1 - y) * log_val
         out = -weight * (add1 + add2)
-        out.resize(sample_size, out.shape[1], refcheck=False)
+        out.resize(sample_size, out.shape[1], refcheck=False)  # отключаем refcheck для работы дебаггера
 
         if regularization == "l1":
             out += self.l1_reg(weight)
@@ -132,7 +135,8 @@ class BaseModel:
                  [0, 1, 0], 
                  [0, 0, 1]]
         """
-        buff_arr = np.zeros(shape=(ans_arr.shape[0], self.num_classes))
+        num = getattr(self, "num_classes")
+        buff_arr = np.zeros(shape=(ans_arr.shape[0], num))
         for i, val in enumerate(ans_arr):
             buff_arr[i, :] = self._ans_as_probs(val)
         return buff_arr
@@ -141,17 +145,9 @@ class BaseModel:
         """
             Конвертирует каждое значение в вероятности
         """
-        if hasattr(self, "num_classes"):
-            out = np.zeros(self.num_classes)
-            out[int(ans) - 1] = 1
-        else:
-            out = ans
-            warnings.warn(
-                """
-                Отсутствует аттрибут BaseModel.num_classes,
-                не получается конвертировать ответы в вероятности, возвращаю вход
-                """
-            )
+        num = getattr(self, "num_classes")
+        out = np.zeros(num)
+        out[int(ans) - 1] = 1
         return out
 
     def get_labels(self, ans_arr):
