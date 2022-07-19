@@ -71,5 +71,23 @@ def get_plain_data(img):
     return img.flatten().astype(np.uint8)
 
 
+def threshold_mid(img):
+    img = get_plain_data(img)
+    img[img>127] = 255
+    img[img<=127] = 0
+    return img
+
+def threshold_low(img):
+    img = get_plain_data(img)
+    img[img>50] = 255
+    img[img<=50] = 0
+    return img
+
+def threshold_high(img):
+    img = get_plain_data(img)
+    img[img>200] = 255
+    img[img<=200] = 0
+    return img
+
 def get_PCA(img):
     raise NotImplementedError
