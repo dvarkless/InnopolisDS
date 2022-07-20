@@ -51,7 +51,7 @@ class BaseModel:
         if getattr(self, 'normalization', False):
             std = np.std(data, axis=0)
             std[std == 0] = 1
-            self._data = (data - np.mean(data, axis=0))/std   
+            self._data = (data - np.mean(data, axis=0))/std
         else:
             self._data = data
 
@@ -128,6 +128,23 @@ class BaseModel:
             out += regularization(weight)
         return out
 
+    def _softmax(self, x):
+        """
+            Возвращает мягкий максимум для массива.
+            Сумма значений по одному измерению равна 1,
+            таким образом можно трактовать полученный массив
+            как массив векторов вероятностей
+
+            Вычисляется по строкам.
+
+            input:
+                x - input array
+            output:
+                numpy.ndarray
+        """
+        mod_array = x + 2   # Таким образом можно избежать деления на крохотные числа
+        return (np.exp(mod_array).T / np.exp(mod_array).sum(axis=1)).T
+
     def get_probabilities(self, ans_arr: np.ndarray) -> np.ndarray:
         """
             Метод для получения вероятностей из ответов. 
@@ -199,6 +216,9 @@ class BaseModel:
             print(e)
             raise AttributeError(
                 'Чтобы получить график стоимости, надо сначала расчитать её: \nself.cost = self.cost_func(y_pred, y)  //пример')
+
+    def get_params(self) -> np.ndarray:
+        return self.params
 
     def predict(self, data):
         raise NotImplementedError

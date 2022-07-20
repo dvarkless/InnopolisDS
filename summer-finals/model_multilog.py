@@ -69,26 +69,6 @@ class MultilogRegression(BaseModel):
 
         return gradient
 
-    def _softmax(self, x) ->np.ndarray:
-        """
-            Возвращает мягкий максимум для массива.
-            Сумма значений по одному измерению равна 1,
-            таким образом можно трактовать полученный массив
-            как массив векторов вероятностей
-
-            Вычисляется по строкам.
-
-            input:
-                x - input array
-            output:
-                numpy.ndarray
-        """
-        mod_array = x + 2   # Таким образом можно избежать деления на крохотные числа
-        return (np.exp(mod_array).T / np.exp(mod_array).sum(axis=1)).T
-
-    def get_params(self) -> np.ndarray:
-        return self.params
-
     def _forward(self, x) -> np.ndarray:
         """
             Модель расчитывает ответ для заданного входа с использованием
@@ -118,8 +98,10 @@ class MultilogRegression(BaseModel):
             output:
                 self - model instance
         """
-        learning_rate = getattr(self, 'learning_rate', 0.01)  # забираем гиперпараметры, если есть
-        batch_size = getattr(self, "batch_size", 10)          # или оставляем дефолтные
+        learning_rate = getattr(self, 'learning_rate',
+                                0.01)  # забираем гиперпараметры, если есть
+        # или оставляем дефолтные
+        batch_size = getattr(self, "batch_size", 10)
         epochs = getattr(self, "epochs", 100)
 
         y, x = self._splice_data(data)
@@ -139,9 +121,9 @@ class MultilogRegression(BaseModel):
                 reg_val = 0
                 if getattr(self, 'reg', False):
                     reg_w = getattr(self, 'reg_w')
-                    if getattr(self, 'reg', '')=='l1':
+                    if getattr(self, 'reg', '') == 'l1':
                         reg_val = self.l2_reg(reg_w)
-                    if getattr(self, 'reg', '')=='l2':
+                    if getattr(self, 'reg', '') == 'l2':
                         reg_val = self.l2_reg(reg_w)
 
                 self.params -= self._compute_gradient(
@@ -149,10 +131,12 @@ class MultilogRegression(BaseModel):
                 )
 
             if getattr(self, "debug", False):       # можно отображать коэффициенты на каждом шаге
-                print(f'-------------------------epoch {epoch}--------------------------')
+                print(
+                    f'-------------------------epoch {epoch}--------------------------')
                 y_pred = self._forward(x)
                 self.cost = self.BCEloss(
-                    y_pred, y, num_samples, regularization=getattr(self, "reg", None)
+                    y_pred, y, num_samples, regularization=getattr(
+                        self, "reg", None)
                 ).sum()
                 print(f"training cost: {self.cost}")
                 print(f"params = {self.params}")
@@ -196,7 +180,7 @@ if __name__ == "__main__":
     }
 
     test_data = np.genfromtxt(
-            "datasets/light-test.csv", delimiter=",", filling_values=0)
+        "datasets/light-test.csv", delimiter=",", filling_values=0)
     for param in ['None', 'l1', 'l2']:
         hp['reg'] = param
         print(f'-----{param}-----')
@@ -207,6 +191,7 @@ if __name__ == "__main__":
         ans_test = model.predict(test_data[:, 1:])
         ans_train = model.predict(my_data[:, 1:])
 
-        print(f'tran dataset accuracy = {return_accuracy(ans_train, my_data[:, 0])}')
-        print(f'test dataset accuracy = {return_accuracy(ans_test, test_data[:, 0])}')
-    
+        print(
+            f'tran dataset accuracy = {return_accuracy(ans_train, my_data[:, 0])}')
+        print(
+            f'test dataset accuracy = {return_accuracy(ans_test, test_data[:, 0])}')
