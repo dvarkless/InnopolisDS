@@ -1,4 +1,4 @@
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 import math
 
 import numpy as np
@@ -57,7 +57,7 @@ class BaseModel:
             self._data = data
 
         if getattr(self, 'shift_column', False):
-            self._data = np.vstack((np.ones_like(self._data[0,:]), self._data))
+            self._data = np.hstack((self._data, np.ones((self._data.shape[0], 1))))
 
     @property
     def params(self) -> np.ndarray:
@@ -83,6 +83,10 @@ class BaseModel:
         self._cost_list.append(input_data)
         self._cost = input_data
 
+    def wierd_vals_detector(self, x):
+        if x in (np.inf, -np.inf, np.nan):
+            raise ValueError(f"Invalid value detected x = {x}")
+        return x
     def l1_reg(self, weight: float) -> np.ndarray:      # L1 regularization
         """
             L1 regularization
@@ -147,9 +151,11 @@ class BaseModel:
                 numpy.ndarray
         """
         mod_array = x + 2   # Таким образом можно избежать деления на крохотные числа
-        return (np.exp(mod_array).T / np.exp(mod_array).sum(axis=1)).T
+        softvals = (np.exp(mod_array).T / np.exp(mod_array).sum(axis=1)).T
 
-    def _iter_batches(self, *args: np.ndarray) -> Iterator:
+        return np.vectorize(self.wierd_vals_detector)(softvals)
+
+    def _iter_batches(self, *args: np.ndarray) -> Generator:
         batch_size = getattr(self, "batch_size", args[0].shape[1])
 
         for i in range(int(args[0].shape[0]/batch_size)):
