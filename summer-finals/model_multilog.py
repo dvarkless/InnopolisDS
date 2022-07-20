@@ -18,7 +18,7 @@ class MultilogRegression(BaseModel):
 
 
             Далее происходит минимизация коэффициентов модели (model.params) 
-            с помощью градиентного спуска.
+        с помощью градиентного спуска.
 
             inputs:
                 input_size - input vector's length for one sample
@@ -101,7 +101,6 @@ class MultilogRegression(BaseModel):
         learning_rate = getattr(self, 'learning_rate',
                                 0.01)  # забираем гиперпараметры, если есть
         # или оставляем дефолтные
-        batch_size = getattr(self, "batch_size", 10)
         epochs = getattr(self, "epochs", 100)
 
         y, x = self._splice_data(data)
@@ -112,12 +111,9 @@ class MultilogRegression(BaseModel):
             indexes = np.random.permutation(num_samples)
             y = y[indexes]
             x = x[indexes]
-            for i in range(int(x.shape[0] / batch_size)):
-                curr_stack = i * batch_size
-                x_batch = x[curr_stack: curr_stack + batch_size, :]
-                y_batch = y[curr_stack: curr_stack + batch_size]
-                y_pred = self._forward(x_batch)
 
+            for x_batch, y_batch in self._iter_batches(x, y):
+                y_pred = self._forward(x_batch)
                 reg_val = 0
                 if getattr(self, 'reg', False):
                     reg_w = getattr(self, 'reg_w')
@@ -175,7 +171,7 @@ if __name__ == "__main__":
         'normalization': True,
         'reg': 'l2',
         'reg_w': 0.01,
-        'debug': False,
+        'debug': True,
         'metrics': [return_accuracy],
     }
 

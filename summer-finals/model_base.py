@@ -1,3 +1,4 @@
+from collections.abc import Iterator
 import math
 
 import numpy as np
@@ -54,6 +55,9 @@ class BaseModel:
             self._data = (data - np.mean(data, axis=0))/std
         else:
             self._data = data
+
+        if getattr(self, 'shift_column', False):
+            self._data = np.vstack((np.ones_like(self._data[0,:]), self._data))
 
     @property
     def params(self) -> np.ndarray:
@@ -144,6 +148,19 @@ class BaseModel:
         """
         mod_array = x + 2   # Таким образом можно избежать деления на крохотные числа
         return (np.exp(mod_array).T / np.exp(mod_array).sum(axis=1)).T
+
+    def _iter_batches(self, *args: np.ndarray) -> Iterator:
+        batch_size = getattr(self, "batch_size", args[0].shape[1])
+
+        for i in range(int(args[0].shape[0]/batch_size)):
+            curr_stack = i * batch_size
+
+            out_arrs = []
+            for arr in args:
+                arr_batch = arr[curr_stack: curr_stack + batch_size, :]
+                out_arrs.append(arr_batch)
+
+            yield out_arrs
 
     def get_probabilities(self, ans_arr: np.ndarray) -> np.ndarray:
         """
