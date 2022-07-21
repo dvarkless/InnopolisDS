@@ -1,5 +1,5 @@
-from collections.abc import Generator, Iterator
 import math
+from collections.abc import Generator
 
 import numpy as np
 
@@ -57,7 +57,8 @@ class BaseModel:
             self._data = data
 
         if getattr(self, 'shift_column', False):
-            self._data = np.hstack((self._data, np.ones((self._data.shape[0], 1))))
+            self._data = np.hstack(
+                (self._data, np.ones((self._data.shape[0], 1))))
 
     @property
     def params(self) -> np.ndarray:
@@ -87,6 +88,7 @@ class BaseModel:
         if x in (np.inf, -np.inf, np.nan):
             raise ValueError(f"Invalid value detected x = {x}")
         return x
+
     def l1_reg(self, weight: float) -> np.ndarray:      # L1 regularization
         """
             L1 regularization
@@ -151,7 +153,8 @@ class BaseModel:
                 numpy.ndarray
         """
         mod_array = x + 2   # Таким образом можно избежать деления на крохотные числа
-        softvals = (np.exp(mod_array).T / np.exp(mod_array).sum(axis=1)).T
+        softvals = (np.exp(mod_array - np.max(x)).T /
+                    np.exp(mod_array - np.max(x)).sum(axis=1)).T
 
         return np.vectorize(self.wierd_vals_detector)(softvals)
 
@@ -168,7 +171,7 @@ class BaseModel:
 
             yield out_arrs
 
-    def get_probabilities(self, ans_arr: np.ndarray) -> np.ndarray:
+    def get_probabilities(self, ans_arr: np.ndarray, custom_fun=None) -> np.ndarray:
         """
             Метод для получения вероятностей из ответов. 
             (отчет идет от 1)
@@ -183,7 +186,9 @@ class BaseModel:
         num = getattr(self, "num_classes")
         buff_arr = np.zeros(shape=(ans_arr.shape[0], num))
         for i, val in enumerate(ans_arr):
-            buff_arr[i, :] = self._ans_as_probs(val)
+            buff_arr[i, :] = self._ans_as_probs(
+                val) if custom_fun is None else custom_fun(val)
+
         return buff_arr
 
     def _ans_as_probs(self, ans):
@@ -193,6 +198,7 @@ class BaseModel:
         num = getattr(self, "num_classes")
         out = np.zeros(num)
         out[int(ans) - 1] = 1
+
         return out
 
     def get_labels(self, ans_arr):
@@ -243,5 +249,36 @@ class BaseModel:
     def get_params(self) -> np.ndarray:
         return self.params
 
-    def predict(self, data):
+    def predict(self, x):
+        """
+            Метод для предказания ответов для входного вектора,
+            от model._forward отличается тем, что входные и
+            выходные данные преобразовываются
+
+            input:
+                x - raw, non-normalized vector
+            output:
+                y - predicted labels
+        """
+
+        raise NotImplementedError
+
+    def fit(data):
+        """
+            Метод разделеняет входную выборку на подвыборки и 
+            находит оптимальные параметры для расчета.
+
+            inputs:
+                data - input data, answers + input vectors
+                       [:, 0] - answers
+                       [:, 1:] - input vectors
+                learning_rate: float
+                batch_size - subsample size
+                epochs - number of iterations for whole sample
+                         number of gradient steps:(epochs*(N/batch_size))
+
+            output:
+                self - model instance
+        """
+
         raise NotImplementedError
