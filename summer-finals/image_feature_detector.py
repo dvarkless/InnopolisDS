@@ -1,10 +1,11 @@
-import numpy as np
 import cv2 as cv
+import numpy as np
 
 
 def get_features(img):
     img = np.resize(img, (28, 28)).astype(np.uint8).T
-    corners = cv.goodFeaturesToTrack(img, 25, 0.05, 4, useHarrisDetector=True, k=-0.09)
+    corners = cv.goodFeaturesToTrack(
+        img, 25, 0.05, 4, useHarrisDetector=True, k=-0.09)
 
     try:
         corners = np.int0(corners)
@@ -68,26 +69,107 @@ def get_features(img):
 
 
 def get_plain_data(img):
+    """
+        Функция выравнивает полученный массив и конвертирует его значения в 8 битные (0-255)
+
+        input:
+            img - input array to convert
+        output:
+            out - converted array (np.ndarray) (type: np.uint8)
+
+    """
     return img.flatten().astype(np.uint8)
 
 
 def threshold_mid(img):
+    """
+        Функция применяет пороговую функцию к каждому значению в массиве:
+            >> threshold = 127
+            >> pixel_value = 0 if pixel_value <= threshold else 255
+
+        input:
+            img - input array to convert
+        output:
+            out - converted array (np.ndarray) (type: np.uint8)
+
+    """
     img = get_plain_data(img)
-    img[img>127] = 255
-    img[img<=127] = 0
+    img[img > 127] = 255
+    img[img <= 127] = 0
     return img
+
 
 def threshold_low(img):
+    """
+         Функция применяет пороговую функцию к каждому значению в массиве:
+             >> threshold = 50
+             >> pixel_value = 0 if pixel_value <= threshold else 255
+
+         input:
+             img - input array to convert
+         output:
+             out - converted array (np.ndarray) (type: np.uint8)
+
+     """
     img = get_plain_data(img)
-    img[img>50] = 255
-    img[img<=50] = 0
+    img[img > 50] = 255
+    img[img <= 50] = 0
     return img
+
 
 def threshold_high(img):
+    """
+        Функция применяет пороговую функцию к каждому значению в массиве:
+            >> threshold = 200
+            >> pixel_value = 0 if pixel_value <= threshold else 255
+
+        input:
+            img - input array to convert
+        output:
+            out - converted array (np.ndarray) (type: np.uint8)
+
+    """
     img = get_plain_data(img)
-    img[img>200] = 255
-    img[img<=200] = 0
+    img[img > 200] = 255
+    img[img <= 200] = 0
     return img
 
-def get_PCA(img):
-    raise NotImplementedError
+
+class PCA_transform:
+    """
+        Применяет Метод Главных Компонент (PCA) к массиву данных для уменьшения его размерности
+        
+        Для задания вектора коэффициентов надо вызвать конструктор класса со значением
+        желаемой выходной размерности и вызвать метод .fit(dataset) передавая в него
+        тренировочный набор данных.
+
+        Далее можно использовать экземпляр класса как функцию для конвертации отдельных точек датасета.
+        ref: "https://stackoverflow.com/questions/58666635/implementing-pca-with-numpy"
+
+        use case:
+            >> transformer = PCA_transform(3) # we want our output dataset to have 3 dims
+            >> transformer.fit(dataset) # dataset.shape = (N, k) N - sample number, k - dimensions
+            >> # transformer = PCA_transform(3).fit(dataset) # same thing
+            >> 
+            >> converted_ds1 = np.vectorize(transformer)(dataset)
+            >> converted_ds2 = np.vectorize(transformer)(test_data) # use it for validation dataset too!
+
+    """
+    def __init__(self, n_dims) -> None:
+        self.n_dims = n_dims - 1
+
+    def __call__(self, img):
+        img = get_plain_data(img)
+        return img @ self.PCA_vector
+
+    def fit(self, dataset):
+        dataset = np.array(list(map(get_plain_data, dataset[:, 1:])))
+        dataset_cov = np.cov(dataset.T)
+        e_values, e_vectors = np.linalg.eigh(dataset_cov)
+
+        e_ind_order = np.flip(e_values.argsort())
+        e_values = e_values[e_ind_order]
+        self.PCA_vector = e_vectors[:, e_ind_order]
+        self.PCA_vector = self.PCA_vector[:, :self.n_dims]
+
+        return self
