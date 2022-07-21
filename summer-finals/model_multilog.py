@@ -21,26 +21,15 @@ class MultilogRegression(BaseModel):
         с помощью градиентного спуска.
 
             inputs:
-                input_size - input vector's length for one sample
-                out_size   - output vector's length for one sample
                 data_converter - look in parent's class (BaseModel)
                 custom_params - custom parameters for this model:
                                 must_have_params = ['reg', 'metrics', 'reg_w', 'debug']
                                 possible_params = ['weight_init']
     """
 
-    def __init__(self, input_size, out_size, data_converter=None, custom_params=None):
+    def __init__(self, data_converter=None, custom_params=None):
         super().__init__(data_converter=data_converter, custom_params=custom_params)
-        input_size = data_converter(np.zeros(input_size)).shape[0]
-        if self.weight_init == 'randn':
-            self.params = np.random.randn(
-                input_size, out_size
-            )
-        else:
-            self.params = np.zeros(
-                (input_size, out_size)
-            )
-        self.num_classes = out_size
+        
         # must_have_params = ['metrics','debug']
         # self.assert_have(must_have_params)
 
@@ -82,22 +71,16 @@ class MultilogRegression(BaseModel):
         return self._softmax(x @ self.params)
 
     def fit(self, data: np.ndarray):
-        """
-            Метод разделеняет входную выборку на подвыборки и 
-            находит оптимальные параметры для расчета.
+        if getattr(self, 'weight_init', 'zeros') == 'randn':
+            self.params = np.random.randn(
+                input_size, out_size
+            )
+        else:
+            self.params = np.zeros(
+                (input_size, out_size)
+            )
 
-            inputs:
-                data - input data, answers + input vectors
-                       [:, 0] - answers
-                       [:, 1:] - input vectors
-                learning_rate: float
-                batch_size - subsample size
-                epochs - number of iterations for whole sample
-                         number of gradient steps:(epochs*(N/batch_size))
-
-            output:
-                self - model instance
-        """
+        self.num_classes = out_size
         learning_rate = getattr(self, 'learning_rate',
                                 0.01)  # забираем гиперпараметры, если есть
         # или оставляем дефолтные
@@ -181,7 +164,7 @@ if __name__ == "__main__":
         hp['reg'] = param
         print(f'-----{param}-----')
         model = MultilogRegression(
-            my_data.shape[1] - 1, num_classes, data_converter=get_plain_data, custom_params=hp
+            data_converter=get_plain_data, custom_params=hp
         ).fit(my_data)
 
         ans_test = model.predict(test_data[:, 1:])
