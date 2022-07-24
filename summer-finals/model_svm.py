@@ -24,8 +24,8 @@ class SVM_Model(BaseModel):
 
     """
 
-    def __init__(self, data_converter=None, custom_params=None) -> None:
-        super().__init__(data_converter, custom_params)
+    def __init__(self, custom_params=None) -> None:
+        super().__init__(custom_params)
 
     def fit(self, data):
         y, x = self._splice_data(data)
@@ -71,7 +71,7 @@ class SVM_Model(BaseModel):
             inputs:
                 y_pred - model's output
                 y - training data answer
-            
+
             output:
                 np.array (shape = n_classes)
         """
@@ -86,7 +86,7 @@ class SVM_Model(BaseModel):
                 y_pred - model's output
                 y - training data answer
                 k - regularization strength
-            
+
             output:
                 np.array (shape = n_classes)
         """
@@ -146,6 +146,7 @@ if __name__ == '__main__':
         "datasets/light-test.csv", delimiter=",", filling_values=0)
 
     hp = {
+        'data_converter': get_plain_data,
         'num_classes': 26,
         'epochs': 200,
         'batch_size': 10,
@@ -159,8 +160,7 @@ if __name__ == '__main__':
     num_classes = 26
 
     pca_transformer = PCA_transform(100).fit(my_data)
-    model = SVM_Model(data_converter=pca_transformer,
-                      custom_params=hp).fit(my_data)
+    model = SVM_Model(custom_params=hp).fit(my_data)
 
     ans_test = model.predict(test_data[:, 1:])
     ans_train = model.predict(my_data[:, 1:])

@@ -23,14 +23,15 @@ class BaseModel:
 
     """
 
-    def __init__(self, data_converter=None, custom_params=None) -> None:
+    def __init__(self, custom_params=None) -> None:
         self._data = np.array([])
-        self.data_converter = data_converter if data_converter else lambda x: x
         self._params = np.array([])
 
         if custom_params:
             for key, val in custom_params.items():
                 setattr(self, key, val)
+
+        self.assert_have(['data_converter'])
 
     def assert_have(self, must_have_names: list) -> None:
         """

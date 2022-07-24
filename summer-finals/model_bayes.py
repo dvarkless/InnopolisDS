@@ -22,8 +22,8 @@ class BayesianClassifier(BaseModel):
         0 или 1
     """
 
-    def __init__(self, data_converter=None, custom_params=None):
-        super().__init__(data_converter=data_converter, custom_params=custom_params)
+    def __init__(self, custom_params=None):
+        super().__init__(custom_params)
 
     def fit(self, data):
         y, x = self._splice_data(data)
@@ -54,11 +54,11 @@ if __name__ == "__main__":
         "datasets/light-test.csv", delimiter=",", filling_values=0)
 
     hp = {
+        'data_converter': get_plain_data,
         'num_classes': 26,
     }
     num_classes = 26
-    model = BayesianClassifier(
-        data_converter=threshold_mid, custom_params=hp).fit(my_data)
+    model = BayesianClassifier(custom_params=hp).fit(my_data)
 
     ans_test = model.predict(test_data[:, 1:])
     ans_train = model.predict(my_data[:, 1:])

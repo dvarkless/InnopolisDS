@@ -27,9 +27,9 @@ class MultilogRegression(BaseModel):
                                 possible_params = ['weight_init']
     """
 
-    def __init__(self, data_converter=None, custom_params=None):
-        super().__init__(data_converter=data_converter, custom_params=custom_params)
-        
+    def __init__(self, custom_params=None):
+        super().__init__(custom_params=custom_params)
+
         # must_have_params = ['metrics','debug']
         # self.assert_have(must_have_params)
 
@@ -147,6 +147,7 @@ if __name__ == "__main__":
                             delimiter=",", filling_values=0)
     num_classes = 26
     hp = {
+        'data_converter': get_plain_data,
         'learning_rate': 0.02,
         'batch_size': 50,
         'epochs': 400,
@@ -163,9 +164,7 @@ if __name__ == "__main__":
     for param in ['None', 'l1', 'l2']:
         hp['reg'] = param
         print(f'-----{param}-----')
-        model = MultilogRegression(
-            data_converter=get_plain_data, custom_params=hp
-        ).fit(my_data)
+        model = MultilogRegression(custom_params=hp).fit(my_data)
 
         ans_test = model.predict(test_data[:, 1:])
         ans_train = model.predict(my_data[:, 1:])
