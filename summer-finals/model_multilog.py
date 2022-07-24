@@ -11,19 +11,21 @@ class MultilogRegression(BaseModel):
         Принцип работы:
             Обучающая выборка делится на батчи случайным образом, происходит расчет
             ответов по формуле:
-                y[N, n_classes] = softmax(X[N, n_input] @ theta[n_input, n_classes])
+                y[N, n_classes] = softmax(
+                    X[N, n_input] @ theta[n_input, n_classes])
                 где N - число значений в выборке,
                 n_classes - число классов в ответе
                 n_input - размерность входного вектора
 
 
-            Далее происходит минимизация коэффициентов модели (model.params) 
+            Далее происходит минимизация коэффициентов модели (model.params)
         с помощью градиентного спуска.
 
             inputs:
                 data_converter - look in parent's class (BaseModel)
                 custom_params - custom parameters for this model:
-                                must_have_params = ['reg', 'metrics', 'reg_w', 'debug']
+                                must_have_params = [
+                                    'reg', 'metrics', 'reg_w', 'debug']
                                 possible_params = ['weight_init']
     """
 
@@ -42,7 +44,7 @@ class MultilogRegression(BaseModel):
                 y_pred - model's predicted output
                 y      - dataset's real answer for this x
                 lr     - learning rate
-                additive - add extra weight if necessary 
+                additive - add extra weight if necessary
                            (e.g. regularization)
 
             output:
@@ -61,7 +63,7 @@ class MultilogRegression(BaseModel):
     def _forward(self, x) -> np.ndarray:
         """
             Модель расчитывает ответ для заданного входа с использованием
-            своей матрицы коэффициентов в данный момент 
+            своей матрицы коэффициентов в данный момент
 
             input:
                 x - input array
@@ -71,24 +73,22 @@ class MultilogRegression(BaseModel):
         return self._softmax(x @ self.params)
 
     def fit(self, data: np.ndarray):
-        if getattr(self, 'weight_init', 'zeros') == 'randn':
-            self.params = np.random.randn(
-                input_size, out_size
-            )
-        else:
-            self.params = np.zeros(
-                (input_size, out_size)
-            )
-
-        self.num_classes = out_size
-        learning_rate = getattr(self, 'learning_rate',
-                                0.01)  # забираем гиперпараметры, если есть
+        learning_rate = getattr(self, 'learning_rate', 0.01)  # забираем гиперпараметры, если есть
         # или оставляем дефолтные
         epochs = getattr(self, "epochs", 100)
 
         y, x = self._splice_data(data)
         y = self.get_probabilities(y)
         num_samples = x.shape[0]
+        
+        if getattr(self, 'weight_init', 'zeros') == 'randn':
+            self.params = np.random.randn(
+                x.shape[1], getattr(self, 'num_classes') 
+            )
+        else:
+            self.params = np.zeros(
+                (x.shape[1], getattr(self, 'num_classes'))
+            )
 
         for epoch in range(epochs):
             indexes = np.random.permutation(num_samples)
@@ -145,13 +145,12 @@ class MultilogRegression(BaseModel):
 if __name__ == "__main__":
     my_data = np.genfromtxt("datasets/light-train.csv",
                             delimiter=",", filling_values=0)
-    num_classes = 26
     hp = {
         'data_converter': get_plain_data,
+        'num_classes': 26,
         'learning_rate': 0.02,
         'batch_size': 50,
         'epochs': 400,
-        'weight_init': 'zeros',
         'normalization': True,
         'reg': 'l2',
         'reg_w': 0.01,
