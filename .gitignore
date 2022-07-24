@@ -1,6 +1,9 @@
 # test model and misc
 scratch/
 
+# big file
+emnist-letters-train.csv
+
 # jupyter stuff
 .jukit/
 .ipynb_checkpoints/
