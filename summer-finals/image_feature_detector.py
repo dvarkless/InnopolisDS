@@ -164,10 +164,27 @@ class PCA_transform:
         return img @ self.PCA_vector
 
     def __repr__(self):
-        return f'PCA_transform({self.n_dims});vector:{self.PCA_vector.shape}'
+        return f'<PCA_transform({self.n_dims});vector:{self.PCA_vector.shape}>'
 
-    def fit(self, dataset):
-        dataset = np.array(list(map(get_plain_data, dataset[:, 1:])))
+    def fit(self, dataset, answer_column=True):
+        """
+            Подстройка конвертера под передаваемые данные.
+            
+            Расчитывает и запоминает трансформационный вектор
+            на основе переданного набора данных.
+
+            Обязательный для вызова метод.
+
+            input:
+                dataset: np.ndarray - input dataset
+                answer_column: bool - True if there is a column with answer
+                labels in the dataset
+
+            output - PCA_transform instance
+        """
+        if answer_column:
+            dataset = dataset[:, 1:]
+        dataset = np.array(list(map(get_plain_data, dataset)))
         dataset_cov = np.cov(dataset.T)
         e_values, e_vectors = np.linalg.eigh(dataset_cov)
 
