@@ -138,7 +138,7 @@ def threshold_high(img):
 class PCA_transform:
     """
         Применяет Метод Главных Компонент (PCA) к массиву данных для уменьшения его размерности
-        
+
         Для задания вектора коэффициентов надо вызвать конструктор класса со значением
         желаемой выходной размерности и вызвать метод .fit(dataset) передавая в него
         тренировочный набор данных.
@@ -155,12 +155,16 @@ class PCA_transform:
             >> converted_ds2 = np.vectorize(transformer)(test_data) # use it for validation dataset too!
 
     """
+
     def __init__(self, n_dims) -> None:
-        self.n_dims = n_dims - 1
+        self.n_dims = n_dims
 
     def __call__(self, img):
         img = get_plain_data(img)
         return img @ self.PCA_vector
+
+    def __repr__(self):
+        return f'PCA_transform({self.n_dims});vector:{self.PCA_vector.shape}'
 
     def fit(self, dataset):
         dataset = np.array(list(map(get_plain_data, dataset[:, 1:])))
