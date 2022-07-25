@@ -1,6 +1,4 @@
 import numpy as np
-from image_feature_detector import get_features, get_plain_data, threshold_mid
-from metrics import return_accuracy
 from model_base import BaseModel
 
 
@@ -24,6 +22,7 @@ class BayesianClassifier(BaseModel):
 
     def __init__(self, custom_params=None):
         super().__init__(custom_params)
+        self.assert_have(['num_classes'])
 
     def fit(self, data):
         y, x = self._splice_data(data)
@@ -45,25 +44,3 @@ class BayesianClassifier(BaseModel):
     def predict(self, x):
         self.data = x
         return self.get_labels(self._softmax(self.data @ self.params))
-
-
-if __name__ == "__main__":
-    my_data = np.genfromtxt("datasets/light-train.csv",
-                            delimiter=",", filling_values=0)
-    test_data = np.genfromtxt(
-        "datasets/light-test.csv", delimiter=",", filling_values=0)
-
-    hp = {
-        'data_converter': get_plain_data,
-        'num_classes': 26,
-    }
-    num_classes = 26
-    model = BayesianClassifier(custom_params=hp).fit(my_data)
-
-    ans_test = model.predict(test_data[:, 1:])
-    ans_train = model.predict(my_data[:, 1:])
-
-    print(
-        f'tran dataset accuracy = {return_accuracy(ans_train, my_data[:, 0])}')
-    print(
-        f'test dataset accuracy = {return_accuracy(ans_test, test_data[:, 0])}')

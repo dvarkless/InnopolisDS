@@ -1,6 +1,4 @@
 import numpy as np
-from image_feature_detector import get_features, get_plain_data
-from metrics import return_accuracy
 from model_base import BaseModel
 
 
@@ -32,8 +30,10 @@ class MultilogRegression(BaseModel):
     def __init__(self, custom_params=None):
         super().__init__(custom_params=custom_params)
 
-        # must_have_params = ['metrics','debug']
-        # self.assert_have(must_have_params)
+        must_have_params = ['shift_column', 'normalization',
+                            'num_classes', 'learning_rate', 'batch_size', 'epochs',
+                            'reg']
+        self.assert_have(must_have_params)
 
     def _compute_gradient(self, x, y_pred, y, lr=0.01, additive=None) -> np.ndarray:
         """
@@ -73,17 +73,18 @@ class MultilogRegression(BaseModel):
         return self._softmax(x @ self.params)
 
     def fit(self, data: np.ndarray):
-        learning_rate = getattr(self, 'learning_rate', 0.01)  # забираем гиперпараметры, если есть
+        # забираем гиперпараметры, если есть
+        learning_rate = getattr(self, 'learning_rate', 0.01)
         # или оставляем дефолтные
         epochs = getattr(self, "epochs", 100)
 
         y, x = self._splice_data(data)
         y = self.get_probabilities(y)
         num_samples = x.shape[0]
-        
+
         if getattr(self, 'weight_init', 'zeros') == 'randn':
             self.params = np.random.randn(
-                x.shape[1], getattr(self, 'num_classes') 
+                x.shape[1], getattr(self, 'num_classes')
             )
         else:
             self.params = np.zeros(
@@ -140,35 +141,3 @@ class MultilogRegression(BaseModel):
         """
         self.data = x
         return self.get_labels(self._forward(self.data))
-
-
-if __name__ == "__main__":
-    my_data = np.genfromtxt("datasets/light-train.csv",
-                            delimiter=",", filling_values=0)
-    hp = {
-        'data_converter': get_plain_data,
-        'num_classes': 26,
-        'learning_rate': 0.02,
-        'batch_size': 50,
-        'epochs': 400,
-        'normalization': True,
-        'reg': 'l2',
-        'reg_w': 0.01,
-        'debug': True,
-        'metrics': [return_accuracy],
-    }
-
-    test_data = np.genfromtxt(
-        "datasets/light-test.csv", delimiter=",", filling_values=0)
-    for param in ['None', 'l1', 'l2']:
-        hp['reg'] = param
-        print(f'-----{param}-----')
-        model = MultilogRegression(custom_params=hp).fit(my_data)
-
-        ans_test = model.predict(test_data[:, 1:])
-        ans_train = model.predict(my_data[:, 1:])
-
-        print(
-            f'tran dataset accuracy = {return_accuracy(ans_train, my_data[:, 0])}')
-        print(
-            f'test dataset accuracy = {return_accuracy(ans_test, test_data[:, 0])}')

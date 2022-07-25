@@ -1,6 +1,4 @@
 import numpy as np
-from image_feature_detector import PCA_transform, get_features, get_plain_data
-from metrics import return_accuracy
 from model_base import BaseModel
 
 
@@ -26,6 +24,10 @@ class SVM_Model(BaseModel):
 
     def __init__(self, custom_params=None) -> None:
         super().__init__(custom_params)
+        must_have_params = ['shift_column', 'normalization',
+                            'num_classes', 'learning_rate', 'batch_size', 'epochs',
+                            'regularization']
+        self.assert_have(must_have_params)
 
     def fit(self, data):
         y, x = self._splice_data(data)
@@ -61,7 +63,7 @@ class SVM_Model(BaseModel):
                 min={self.params.min()}
                 ''')
 
-            return self
+        return self
 
     def hinge_loss(self, y_pred, y):
         """
@@ -137,35 +139,3 @@ class SVM_Model(BaseModel):
     def predict(self, x):
         self.data = x
         return self._ovr_choose(self.data @ self.params)
-
-
-if __name__ == '__main__':
-    my_data = np.genfromtxt("datasets/light-train.csv",
-                            delimiter=",", filling_values=0)
-    test_data = np.genfromtxt(
-        "datasets/light-test.csv", delimiter=",", filling_values=0)
-
-    hp = {
-        'data_converter': get_plain_data,
-        'num_classes': 26,
-        'epochs': 200,
-        'batch_size': 10,
-        'learning_rate': 0.0001,
-        'regularization': 0.01,
-        'normalization': True,
-        'shift_column': True,
-        'debug': True,
-
-    }
-    num_classes = 26
-
-    pca_transformer = PCA_transform(100).fit(my_data)
-    model = SVM_Model(custom_params=hp).fit(my_data)
-
-    ans_test = model.predict(test_data[:, 1:])
-    ans_train = model.predict(my_data[:, 1:])
-
-    print(
-        f'tran dataset accuracy = {return_accuracy(ans_train, my_data[:, 0])}')
-    print(
-        f'test dataset accuracy = {return_accuracy(ans_test, test_data[:, 0])}')
