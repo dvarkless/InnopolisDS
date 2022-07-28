@@ -1,8 +1,8 @@
-from typing import Callable
 import functools
 import math
 import time
 from itertools import product
+from typing import Callable
 
 import numpy as np
 from alive_progress import alive_bar
@@ -44,6 +44,7 @@ class ModelRunner:
             defaults: dict - default kwargs for your model
             metrics: list - list of functions, they must take only two positional args: foo(preds, answers)
     """
+
     def __init__(self, model_class, defaults=None, metrics=None, responsive_bar=False) -> None:
         self.model_class = model_class
         self.metrics = metrics
@@ -57,7 +58,7 @@ class ModelRunner:
     def run(self, train: np.ndarray, eval_input: np.ndarray, eval_ans: np.ndarray, params: dict, one_vs_one: bool = False):
         """
             Запустить проверку моделей с заданными данными и параметрами.
-            
+
             Итерируемые параметры задаются в словаре params в виде:
                 >>> params = {
                 >>>     'lr': [1,2,3,4]
@@ -84,15 +85,17 @@ class ModelRunner:
 
         """
         self._metric_data = []
+        self._models = []
         curr_params = dict()
         if one_vs_one:
             if len(list(params.values())) <= 1:
                 pairs = list(*params.values())
             else:
                 pairs = list(product(*list(params.values())))
-            
+
             if self._responsive_bar:
-                len_model_ticks = self.model_class(self.defaults).define_tick(None, additive=len(eval_ans))
+                len_model_ticks = self.model_class(
+                    self.defaults).define_tick(None, additive=len(eval_ans))
             else:
                 len_model_ticks = 1
             with alive_bar(len(list(pairs)*len_model_ticks), title=f'Проверка модели {self.model_class.__name__}', force_tty=True, bar='filling') as bar:
@@ -108,13 +111,15 @@ class ModelRunner:
                         print(f'{key} = {val}')
 
                     self._parameters_data.append(list(curr_params.values()))
-                    self._run_method(train, eval_input, eval_ans, curr_params, bar)
+                    self._run_method(train, eval_input,
+                                     eval_ans, curr_params, bar)
                     print('-----End with-----')
                     bar()
         else:
             iter_lens = [len(val) for val in params.values()]
             if self._responsive_bar:
-                len_model_ticks = self.model_class(self.defaults).define_tick(None, additive=len(eval_ans))
+                len_model_ticks = self.model_class(
+                    self.defaults).define_tick(None, additive=len(eval_ans))
             else:
                 len_model_ticks = 1
             max_len = max(iter_lens)
@@ -133,7 +138,8 @@ class ModelRunner:
                         print(f'{key} = {val}')
 
                     self._parameters_data.append(list(curr_params.values()))
-                    self._run_method(train, eval_input, eval_ans, curr_params, bar)
+                    self._run_method(train, eval_input,
+                                     eval_ans, curr_params, bar)
                     bar()
                     print('-----End with-----')
 
@@ -168,6 +174,7 @@ class ModelRunner:
         print('~eval complete in ', end='')
         answer = self._run_eval(eval_input)
         self._comma_metrics(answer, eval_ans)
+        self._models.append(self.model)
 
     def _mix_params(self, main, invasive):
         """
@@ -220,6 +227,9 @@ class ModelRunner:
         """
         score = [math.prod(vals) for vals in metrics]
         return score.index(max(score))
+
+    def get_models(self):
+        return self._models
 
     def get_metrics(self):
         """
