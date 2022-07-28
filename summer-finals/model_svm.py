@@ -52,6 +52,9 @@ class SVM_Model(BaseModel):
 
             loss = self.soft_margin_loss(self._forward(x), y)
 
+            if hasattr(self, '_tick'):
+                self._tick()
+
             if debug:
                 print(f'-----epoch {epoch+1}/{epochs}-----  ', end='')
                 print(f'Current cost: {loss.sum():.2f}')

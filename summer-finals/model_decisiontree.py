@@ -26,8 +26,8 @@ class Question:
         return f'Question "#{self.feature} > {self.question_val:.3f}?" on level {self.level}'
 
     def __repr__(self):
-        return f'''{self.level}) Is var #{self.feature} > {self.question_val:.3f}? 
-                (G={self.gini:.2f})((L({self.left_len})->{self.left_mean})R({self.right_len})->{self.right_mean})'''
+        return f'{self.level}) Is var #{self.feature} > {self.question_val:.3f}?\n \
+                (G={self.gini:.2f})((L({self.left_len})->{self.left_mean})R({self.right_len})->{self.right_mean})'
 
     def split_by_question(self, data: np.ndarray):
         is_true = data[:, self.feature] > self.question_val
@@ -102,6 +102,8 @@ class DecisionTreeClassifier(BaseModel):
         for i in range(self.y.shape[1]):
             data = np.hstack((self.x, self.y[:, i][:, np.newaxis]))
             self.tree_root.append(self.build_tree(0, data))
+            if hasattr(self, '_tick'):
+                self._tick()
 
     def _return_ranges(self, min_val: float, max_val: float, mean_val: float, num: int):
         num = (num+1)//2
@@ -294,7 +296,7 @@ if __name__ == "__main__":
         'sample_len': 32,
         'num_classes': 26,
         'window_size': -1,
-        'min_samples': 3,
+        'min_samples': 4,
         'max_depth': 7,
         'tree_type': 'multilabel_ovo',
 

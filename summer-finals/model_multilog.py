@@ -110,6 +110,9 @@ class MultilogRegression(BaseModel):
                     x, y_pred, y_batch, lr=learning_rate, additive=reg_val
                 )
 
+            if hasattr(self, '_tick'):
+                self._tick()
+
             if getattr(self, "debug", False):       # можно отображать коэффициенты на каждом шаге
                 print(
                     f'-------------------------epoch {epoch}--------------------------')

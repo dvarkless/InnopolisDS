@@ -1,3 +1,4 @@
+from typing import Callable
 import functools
 import math
 import time
@@ -43,7 +44,7 @@ class ModelRunner:
             defaults: dict - default kwargs for your model
             metrics: list - list of functions, they must take only two positional args: foo(preds, answers)
     """
-    def __init__(self, model_class, defaults=None, metrics=None) -> None:
+    def __init__(self, model_class, defaults=None, metrics=None, responsive_bar=False) -> None:
         self.model_class = model_class
         self.metrics = metrics
         self._metric_data = []
@@ -51,7 +52,7 @@ class ModelRunner:
         if defaults is not None:
             self.defaults = defaults
 
-        self._curr_state = 'start'
+        self._responsive_bar = responsive_bar
 
     def run(self, train: np.ndarray, eval_input: np.ndarray, eval_ans: np.ndarray, params: dict, one_vs_one: bool = False):
         """
@@ -89,8 +90,12 @@ class ModelRunner:
                 pairs = list(*params.values())
             else:
                 pairs = list(product(*list(params.values())))
-
-            with alive_bar(len(list(pairs)), title=f'Проверка модели {self.model_class.__name__}', force_tty=True, bar='filling') as bar:
+            
+            if self._responsive_bar:
+                len_model_ticks = self.model_class(self.defaults).define_tick(None, additive=len(eval_ans))
+            else:
+                len_model_ticks = 1
+            with alive_bar(len(list(pairs)*len_model_ticks), title=f'Проверка модели {self.model_class.__name__}', force_tty=True, bar='filling') as bar:
                 for vals in pairs:
                     for i, key in enumerate(params.keys()):
                         try:
@@ -103,13 +108,17 @@ class ModelRunner:
                         print(f'{key} = {val}')
 
                     self._parameters_data.append(list(curr_params.values()))
-                    self._run_method(train, eval_input, eval_ans, curr_params)
+                    self._run_method(train, eval_input, eval_ans, curr_params, bar)
                     print('-----End with-----')
                     bar()
         else:
             iter_lens = [len(val) for val in params.values()]
+            if self._responsive_bar:
+                len_model_ticks = self.model_class(self.defaults).define_tick(None, additive=len(eval_ans))
+            else:
+                len_model_ticks = 1
             max_len = max(iter_lens)
-            with alive_bar(max_len, title=f'Проверка модели {self.model_class.__name__}', force_tty=True, bar='filling') as bar:
+            with alive_bar(max_len*len_model_ticks, title=f'Проверка модели {self.model_class.__name__}', force_tty=True, bar='filling') as bar:
                 for i in range(max_len):
                     for pos, key in enumerate(params.keys()):
                         this_len = iter_lens[pos]
@@ -124,7 +133,7 @@ class ModelRunner:
                         print(f'{key} = {val}')
 
                     self._parameters_data.append(list(curr_params.values()))
-                    self._run_method(train, eval_input, eval_ans, curr_params)
+                    self._run_method(train, eval_input, eval_ans, curr_params, bar)
                     bar()
                     print('-----End with-----')
 
@@ -134,7 +143,7 @@ class ModelRunner:
         print(f"With hyperparameters: {self._parameters_data[pos]}")
         print(f'Got metrics: {self._metric_data[pos]}')
 
-    def _run_method(self, train: np.ndarray, eval_input: np.ndarray, eval_ans: np.ndarray, params: dict):
+    def _run_method(self, train: np.ndarray, eval_input: np.ndarray, eval_ans: np.ndarray, params: dict, bar_obj: Callable):
         """
             Внутренний обработчик ввода и вывода данных модели
 
@@ -149,6 +158,9 @@ class ModelRunner:
         """
         params_to_pass = self._mix_params(self.defaults, params)
         self.model = self.model_class(params_to_pass)
+
+        if self._responsive_bar:
+            self.model.define_tick(bar_obj, len(eval_ans))
 
         print('~fit complete in ', end='')
         self._run_train(train)

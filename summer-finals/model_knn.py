@@ -26,6 +26,9 @@ class KnnModel(BaseModel):
             # Finds the majority of k nearest neighbors
             predictions[i] = np.bincount(
                 label_neighbors.astype("int64")).argmax()
+
+            if hasattr(self, '_tick'):
+                self._tick()
         return predictions
 
     def _calculate_distances(self, new_point):

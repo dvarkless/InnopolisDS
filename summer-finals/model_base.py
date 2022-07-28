@@ -236,6 +236,28 @@ class BaseModel:
         self.data = train_data[:, 1:]
         return ans, self.data
 
+    def define_tick(self, foo, additive=0):
+        self._tick = foo
+        type1 = ['batch_size', 'epochs']
+        type2 = ['tree_type']
+        type3 = ['k']
+
+        if all([hasattr(self, attr) for attr in type1]):
+            return getattr(self, 'epochs')
+        elif all([hasattr(self, attr) for attr in type2]):
+            num_classes = getattr(self, 'num_classes')
+            tree_table = {
+                    'binary': 1,
+                    'multilabel': 1,
+                    'multilabel_ovo': num_classes*(num_classes-1)//2,
+                    'multilabel_ovr': num_classes,
+                    }
+            return tree_table[getattr(self, 'tree_type')]
+        elif all([hasattr(self, attr) for attr in type3]):
+            return 1+additive
+        else:
+            return 1
+
     def get_cost_list(self):
         """
             return costs per epoch if exists
