@@ -1,39 +1,46 @@
 from itertools import combinations
 
 import numpy as np
+from image_feature_detector import *
+from metrics import *
 from model_base import BaseModel
 from model_runner import ModelRunner
 
-from metrics import *
-from image_feature_detector import *
-
 
 class Question:
-    def __init__(self, level, feature, question_val) -> None:
+    def __init__(self, level: int, feature: int, question_val: float) -> None:
         self.level = level
         self.feature = feature
         self.question_val = question_val
         self.is_true_mask = np.array([])
+        self.right_len = 0
+        self.left_len = 0
 
-    def __call__(self, row):
+    def __call__(self, row: np.ndarray):
         if row[self.feature] > self.question_val:
             return self.right_branch(row)
         else:
             return self.left_branch(row)
 
     def __name__(self):
-        return f'Question #{self.feature}>{self.question_val}? on level {self.level}'
+        return f'Question "#{self.feature} > {self.question_val:.3f}?" on level {self.level}'
 
     def __repr__(self):
-        return f'{self.level}) Is var #{self.feature}>{self.question_val}? (gini={self.gini})'
+        return f'''{self.level}) Is var #{self.feature} > {self.question_val:.3f}? 
+                (G={self.gini:.2f})((L({self.left_len})->{self.left_mean})R({self.right_len})->{self.right_mean})'''
 
-    def split_by_question(self, data):
+    def split_by_question(self, data: np.ndarray):
         is_true = data[:, self.feature] > self.question_val
         is_false = ~is_true
+        self.right_len = data[is_true].shape[0]
+        self.right_mean = data[is_true][:, -1].mean()
 
-        return is_false@data, is_true@data
+        self.left_len = data[is_false].shape[0]
+        self.left_mean = data[is_false][:, -1].mean()
 
-    def my_gini(self, data, min_samples=0):
+        return data[is_false], data[is_true]
+
+    def my_gini(self, data: np.ndarray, min_samples: int = 0):
         self.gini = DecisionTreeClassifier.get_gini(
             *self.split_by_question(data), min_samples)
         return self.gini
@@ -46,11 +53,11 @@ class Question:
 
 
 class Leaf:
-    def __init__(self, level, data) -> None:
+    def __init__(self, level: int, data: np.ndarray) -> None:
         self.level = level
-        self.prediction = data[:, -1].mean()
+        self.prediction = round(data[:, -1].mean())
 
-    def __call__(self, row):
+    def __call__(self, row: np.ndarray):
         return self.prediction
 
     def __repr__(self):
@@ -60,11 +67,9 @@ class Leaf:
 class DecisionTreeClassifier(BaseModel):
     def __init__(self, custom_params=None) -> None:
         self.must_have_params = [
-            'decrease_accuracy',
-            'min_val',
-            'max_val',
+            'sample_len',
             'num_classes',
-            'leap_size',
+            'window_size',
             'min_samples',
             'max_depth',
             'tree_type',
@@ -73,16 +78,17 @@ class DecisionTreeClassifier(BaseModel):
         super().__init__(custom_params)
         self.tree_root = []
 
-    def fit(self, dataset):
+    def fit(self, dataset: np.ndarray):
         self.y, self.x = self._splice_data(dataset)
         if getattr(self, 'tree_type') in ('binary', 'multilabel'):
             self.y = self.y[:, np.newaxis]
         elif getattr(self, 'tree_type') == 'multilabel_ovo':
-            self.y = self._ovo_split(self.y)
+            self.y = self._ovo_split(self.get_probabilities(self.y))
         elif getattr(self, 'tree_type') == 'multilabel_ovr':
             self.y = self.get_probabilities(self.y)
         else:
-            raise AssertionError(f"Unknown tree type: {getattr(self, 'tree_type')}")
+            raise AssertionError(
+                f"Unknown tree type: {getattr(self, 'tree_type')}")
 
         if getattr(self, 'tree_type') in ('multilabel_ovo', 'multilabel_ovr'):
             num_classes = getattr(self, 'num_classes')
@@ -90,17 +96,33 @@ class DecisionTreeClassifier(BaseModel):
             num_classes = 1
 
         self.tree_root = []
+        self.question_list = self._return_ranges(
+            self.x.min(), self.x.max(), self.x.mean(), getattr(self, 'sample_len'))
 
-        for i in range(num_classes):
+        for i in range(self.y.shape[1]):
             data = np.hstack((self.x, self.y[:, i][:, np.newaxis]))
             self.tree_root.append(self.build_tree(0, data))
 
-    def build_tree(self, level, data):
-        leap_size = getattr(self, 'leap_size')
+    def _return_ranges(self, min_val: float, max_val: float, mean_val: float, num: int):
+        num = (num+1)//2
+        right = np.geomspace(mean_val, max_val, num=num)
+        if min_val < 0:
+            left = -(np.geomspace(mean_val, -min_val +
+                     mean_val*2, num=num) - mean_val*2)[::-1]
+        else:
+            left = np.geomspace(mean_val, min_val, num=num)[::-1]
 
-        my_question = self.create_node(level, leap_size)
+        return np.hstack((left, right[1:]))
 
-        if my_question.my_gini(data) == 0:
+    def build_tree(self, level: int, data: np.ndarray):
+        window_size = getattr(self, 'window_size')
+        # Округляем до ближайшего нечетного
+        # Чтобы работало вычисление текущих координат
+        window_size = round(window_size+0.5)-1
+
+        my_question = self.create_node(data, level, window_size)
+
+        if my_question.my_gini(data, min_samples=getattr(self, 'min_samples')) == 0:
             return Leaf(level, data)
         if level == getattr(self, 'max_depth', 10):
             return Leaf(level, data)
@@ -112,9 +134,8 @@ class DecisionTreeClassifier(BaseModel):
 
         return my_question.hold_branches(left_branch, right_branch)
 
-    def predict(self, input_data):
-        num_classes = getattr(self, 'num_classes')
-        out = np.zeros((input_data.shape[0], num_classes))
+    def predict(self, input_data: np.ndarray):
+        out = np.zeros((input_data.shape[0], self.y.shape[1]))
         for i, tree in enumerate(self.tree_root):
             out[:, i] = np.array(list(map(tree, input_data)))
 
@@ -125,7 +146,7 @@ class DecisionTreeClassifier(BaseModel):
         elif getattr(self, 'tree_type') == 'multilabel_ovr':
             return self._ovr_choose(out)
 
-    def _ovr_choose(self, x):
+    def _ovr_choose(self, x: np.ndarray):
         """
         Возвращаем позицию наибольшего значения
 
@@ -136,17 +157,17 @@ class DecisionTreeClassifier(BaseModel):
         """
         return np.argmax(x, axis=1) + 1
 
-    def _ovo_split(self, x):
+    def _ovo_split(self, x: np.ndarray):
         num_count = getattr(self, 'num_classes')
-        pairs = combinations(range(num_count), 2)
-        out = np.zeros((x.shape[0], len(list(pairs))))
+        pairs = list(combinations(range(num_count), 2))
+        out = np.zeros((x.shape[0], len(pairs)))
         for i, vals in enumerate(pairs):
             val1, _ = vals
             out[:, i] = x[:, val1]
 
         return out
 
-    def _ovo_choose(self, x):
+    def _ovo_choose(self, x: np.ndarray):
         num_count = getattr(self, 'num_classes')
         out = np.zeros((x.shape[0], num_count))
         for i, vals in enumerate(combinations(range(num_count), 2)):
@@ -156,56 +177,65 @@ class DecisionTreeClassifier(BaseModel):
 
         return self._ovr_choose(x)
 
-    def create_node(self, level, leap_size=1):
+    def _array_window(self, arr, x, y, size):
+        ''' Given a 2D-array, returns an nxn array whose "center" element is arr[x,y]'''
+        arr = np.roll(np.roll(arr, shift=-x+1, axis=0), shift=-y+1, axis=1)
+        return arr[:size, :size]
+
+    def create_node(self, data: np.ndarray, level: int, window_size: int = -1):
         feature_len = self.x.shape[1]
 
-        min_val = getattr(self, 'min_val')
-        max_val = getattr(self, 'max_val')
-
-        decrease_accuracy = getattr(self, 'decrease_accuracy', 8)
-        discrete_vals = list(range(min_val, max_val, decrease_accuracy))
-
-        discrete_vals = np.array(discrete_vals)
-        possibles_questions = np.ones(
-            (feature_len, len(discrete_vals))) * discrete_vals
         curr_x = feature_len//2
-        curr_y = max_val//decrease_accuracy//2
+        curr_y = len(self.question_list)//2
+
+        possible_questions = np.ones(
+            (feature_len, len(self.question_list))) * self.question_list
+        feature_array = np.ones(
+            (feature_len, len(self.question_list))) * np.arange(feature_len)[:, np.newaxis]
+        feature_array = feature_array.astype(np.int64)
 
         for _ in range(25):
-            low_x = (curr_x-leap_size) % feature_len if leap_size != -1 else 0
-            high_x = (curr_x+leap_size) % feature_len if leap_size != - \
-                1 else feature_len-1
+            if window_size > 0:
+                question_window = self._array_window(
+                    possible_questions, curr_x, curr_y, window_size)
+                feature_window = self._array_window(
+                    feature_array, curr_x, curr_y, window_size)
+            else:
+                question_window = possible_questions
+                feature_window = feature_array
 
-            low_y = (curr_y-leap_size) % (max_val //
-                                          decrease_accuracy) if leap_size != -1 else 0
-            high_y = (curr_y+leap_size) % (max_val//decrease_accuracy) if leap_size != - \
-                1 else (max_val//decrease_accuracy) - 1
-
-            local_gini = np.vectorize(self.calculate_gini)(
-                possibles_questions[low_x:high_x, low_y:high_y])
+            v_gini = np.vectorize(self.calculate_gini)
+            v_gini.excluded.add(0)
+            local_gini = v_gini(
+                data, feature_window, question_window)
+            # print(f'max local_gini = {local_gini.max()}')
+            if local_gini.max() == 0:
+                break
 
             max_ind = np.unravel_index(
                 np.argmax(local_gini, axis=None), local_gini.shape)
-            if leap_size == -1:
+            if window_size == -1:
+                curr_x, curr_y = [int(val) for val in max_ind]
                 break
 
-            max_ind = max_ind[0] + curr_x + \
-                leap_size, max_ind[1] + curr_y + leap_size
-            if max_ind == (curr_x, curr_y):
+            max_ind_global = (max_ind[0] + curr_x - window_size//2,
+                              max_ind[1] + curr_y - window_size//2)
+            curr_x, curr_y = [int(max(pos, 0)) for pos in max_ind_global]
+            # print(f'max_global = {max_ind_global}')
+            # print(f'current = {(curr_x, curr_y)}')
+            if max_ind_global == (curr_x, curr_y):
                 break
-            else:
-                curr_x, curr_y = max_ind
 
-        return Question(level, curr_x, discrete_vals[curr_y])
+        return Question(level, curr_x, self.question_list[curr_y])
 
-    def calculate_gini(self, question_val):
-        my_question = Question(None, None, question_val)
+    def calculate_gini(self, data: np.ndarray, feature: int, question_val: float):
+        my_question = Question(0, feature, question_val)
 
-        left, right = my_question.split_by_question(self.x)
+        left, right = my_question.split_by_question(data)
         return self.get_gini(left, right, getattr(self, 'min_samples', 0))
 
-    @staticmethod
-    def get_gini(left, right, min_samples=0):
+    @ staticmethod
+    def get_gini(left: np.ndarray, right: np.ndarray, min_samples: float = 0):
         l_counts = np.unique(left[:, -1], return_counts=True)[1]
         r_counts = np.unique(right[:, -1], return_counts=True)[1]
         len_L = l_counts.sum()
@@ -215,48 +245,66 @@ class DecisionTreeClassifier(BaseModel):
             return 0
         return np.sum(np.power(l_counts, 2))/len_L + np.sum(np.power(r_counts, 2))/len_R
 
-    def print_tree(self, node, spacing=""):
+    def print_tree(self):
+        print('========DecisionTreeModel=======')
+        print(f'Parameters are: ')
+        for name in self.must_have_params:
+            val = getattr(self, name)
+            print(f'{name} = {val}')
+        print('===Tree structure:===')
+        for i, branch in enumerate(self.tree_root):
+            print(f'===================={i}=======================')
+            self.__print_tree(branch)
+
+    def __print_tree(self, node, spacing=""):
         """World's most elegant tree printing function."""
 
         # Print the question at this node
-        print (spacing + str(node))
+        print(spacing + str(node))
 
+        if isinstance(node, Leaf):
+            return
         # Call this function recursively on the true branch
-        print (spacing + '--> True:')
-        self.print_tree(node.true_branch, spacing + "  ")
+        print(spacing + '--> True:')
+        self.__print_tree(node.right_branch, spacing + "  ")
 
         # Call this function recursively on the false branch
-        print (spacing + '--> False:')
-        self.print_tree(node.false_branch, spacing + "  ")
+        print(spacing + '--> False:')
+        self.__print_tree(node.left_branch, spacing + "  ")
 
 
 if __name__ == "__main__":
     training_data = np.genfromtxt("datasets/light-train.csv",
-                                delimiter=",", filling_values=0)
+                                  delimiter=",", filling_values=0)
     evaluation_data = np.genfromtxt(
         "datasets/light-test.csv", delimiter=",", filling_values=0)
 
     evaluation_input = evaluation_data[:, 1:]
     evaluation_answers = evaluation_data[:, 0]
 
-    my_metrics = [return_accuracy, return_recall, return_precision, return_f1]
-    PCA_severe = PCA_transform(49).fit(training_data, answer_column=True) # x16
+    # my_metrics = [return_accuracy, return_recall, return_precision, return_f1]
+    my_metrics = [return_accuracy, predictions_mean, predictions_std]
+    PCA_severe = PCA_transform(49).fit(
+        training_data, answer_column=True)  # x16
+    PCA_severe = PCA_transform(49).fit(
+        training_data, answer_column=True)  # x16
+
     hp = {
         'data_converter': PCA_severe,
+        'sample_len': 32,
         'num_classes': 26,
-        'decrease_accuracy': 8,
-        'min_val': 0,
-        'max_val': 256,
-        'leap_size': 2,
-        'min_samples': 4,
-        'max_depth': 10,
-        'tree_type': 'multilabel_ovr',
+        'window_size': -1,
+        'min_samples': 3,
+        'max_depth': 7,
+        'tree_type': 'multilabel_ovo',
 
     }
 
-
-    TreeRunner= ModelRunner(DecisionTreeClassifier, defaults=hp, metrics=my_metrics)
+    TreeRunner = ModelRunner(DecisionTreeClassifier,
+                             defaults=hp, metrics=my_metrics)
     params_to_change = {
-            'data_converter': [PCA_severe]
-            }
-    TreeRunner.run(training_data, evaluation_input, evaluation_answers, params_to_change, one_vs_one=False)
+        'data_converter': [PCA_severe]
+    }
+    TreeRunner.run(training_data, evaluation_input,
+                   evaluation_answers, params_to_change, one_vs_one=False)
+    # TreeRunner.model.print_tree()
