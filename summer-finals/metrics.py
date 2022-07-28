@@ -29,6 +29,11 @@ def return_f1(preds, answer):
 def return_accuracy(preds, answer):
     return accuracy_score(answer, preds)
 
+def predictions_mean(preds, answer):
+    return preds.mean()
+
+def predictions_std(preds, answer):
+    return preds.std()
 
 def print_accuracy(preds, answer):
     print(accuracy_score(answer, preds))
