@@ -1,6 +1,36 @@
 import matplotlib.pyplot as plt
+import numpy as np
 from sklearn.metrics import (ConfusionMatrixDisplay, accuracy_score, f1_score,
                              precision_score, recall_score, roc_auc_score)
+
+
+def get_probabilities_copy(ans_arr: np.ndarray, num_classes) -> np.ndarray:
+    """
+        Функция для получения вероятностей из ответов. 
+        (отчет идет от 1)
+        Пример:
+            >> self.num_classes = 3
+            >> a = [1, 2, 3]
+            >> self.get_probabilities(a)
+            [[1, 0, 0],
+             [0, 1, 0], 
+             [0, 0, 1]]
+    """
+    buff_arr = np.zeros(shape=(ans_arr.shape[0], round(num_classes)-1))
+    for i, val in enumerate(ans_arr):
+        buff_arr[i, :] = _ans_as_probs_copy(val, num_classes)
+
+    return buff_arr
+
+
+def _ans_as_probs_copy(answer, num_classes):
+    """
+        Конвертирует каждое значение в вероятности
+    """
+    out = np.zeros(round(num_classes)-1)
+    out[int(answer) - 1] = 1
+
+    return out
 
 
 def show_metrics_matrix(preds, answer):
@@ -27,10 +57,17 @@ def return_f1(preds, answer):
 
 
 def return_roc_auc_ovo(preds, answer):
+    num_classes = answer.max()
+    preds = get_probabilities_copy(preds, num_classes)
+    answer = get_probabilities_copy(answer, num_classes)
     return roc_auc_score(answer, preds, average='macro', multi_class='ovo')
 
 
 def return_roc_auc_ovr(preds, answer):
+    num_classes = answer.max()
+    preds = get_probabilities_copy(preds, num_classes)
+    answer = get_probabilities_copy(answer, num_classes)
+
     return roc_auc_score(answer, preds, average='macro', multi_class='ovr')
 
 
