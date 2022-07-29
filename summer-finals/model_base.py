@@ -1,3 +1,4 @@
+import functools
 import math
 from collections.abc import Generator
 
@@ -85,7 +86,16 @@ class BaseModel:
         self._cost_list.append(input_data)
         self._cost = input_data
 
-    def wierd_vals_detector(self, x):
+    @staticmethod
+    def wierd_vals_detector(x: float):
+        """
+            Вызывает исключение, если в модели появляются неадекватные данные
+
+            input:
+                x: float - value to check
+            output:
+                x: float - the same value
+        """
         if x in (np.inf, -np.inf, np.nan):
             raise ValueError(f"Invalid value detected x = {x}")
         return x
@@ -93,6 +103,7 @@ class BaseModel:
     def l1_reg(self, weight: float) -> np.ndarray:      # L1 regularization
         """
             L1 regularization
+
             input - weight constant (0 < c < 1)
         """
         return weight * np.abs(self.params).sum(axis=0)
@@ -100,6 +111,7 @@ class BaseModel:
     def l2_reg(self, weight: float) -> np.ndarray:      # L2 regularization
         """
             L2 regularization
+
             input - weight constant (0 < c < 1)
         """
         return weight * np.sqrt(np.power(self.params, 2)).sum(axis=0)
@@ -160,6 +172,18 @@ class BaseModel:
         return np.vectorize(self.wierd_vals_detector)(softvals)
 
     def _iter_batches(self, *args: np.ndarray) -> Generator:
+        """
+            Метод возвращает генератор для разделения датасетов на мини выборки
+
+            use case:
+                self.batch_size = 50
+                >>> for x_batch, y_batch in self._iter_batches(x,y):
+                >>>     pass
+            inputs:
+                args: np.ndarray - multiple datasets to divide and iterate to
+            output:
+                Generator object
+        """
         batch_size = getattr(self, "batch_size", args[0].shape[1])
 
         for i in range(int(args[0].shape[0]/batch_size)):
@@ -237,6 +261,19 @@ class BaseModel:
         return ans, self.data
 
     def define_tick(self, foo, additive=0):
+        """
+            Позволяет передать функцию, которую надо вызывать при
+            прохождении моделью одного шага обучения.
+
+            Используется для более плавного отображения полосы загрузки
+            при запуске модели через ModelRunner
+
+            input:
+                foo - function to call
+                additive: int - value to add to returning value
+            output:
+                count_ticks: int - how many times function will be called
+        """
         self._tick = foo
         type1 = ['batch_size', 'epochs']
         type2 = ['tree_type']
@@ -247,11 +284,11 @@ class BaseModel:
         elif all([hasattr(self, attr) for attr in type2]):
             num_classes = getattr(self, 'num_classes')
             tree_table = {
-                    'binary': 1,
-                    'multilabel': 1,
-                    'multilabel_ovo': num_classes*(num_classes-1)//2,
-                    'multilabel_ovr': num_classes,
-                    }
+                'binary': 1,
+                'multilabel': 1,
+                'multilabel_ovo': num_classes*(num_classes-1)//2,
+                'multilabel_ovr': num_classes,
+            }
             return tree_table[getattr(self, 'tree_type')]
         elif all([hasattr(self, attr) for attr in type3]):
             return 1+additive
@@ -305,3 +342,15 @@ class BaseModel:
         """
 
         raise NotImplementedError
+
+
+def inval_check(func):
+    @functools.wraps
+    def _wrapper(self, *args, **kwargs):
+        out = func()
+        if isinstance(out, np.ndarray):
+            np.vectorize(BaseModel.wierd_vals_detector)(out)
+        elif isinstance(out, list) or isinstance(out, tuple):
+            if isinstance(out[0], np.ndarray):
+                np.vectorize(BaseModel.wierd_vals_detector)(out)
+    return _wrapper
