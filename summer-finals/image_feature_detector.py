@@ -67,6 +67,10 @@ def get_features(img):
         ]  # len() = 13
     )
 
+def convert_to_emnist(img):
+    img = np.resize(img, (28, 28)).astype(np.uint8).T
+    return get_plain_data(img)
+
 
 def get_plain_data(img):
     """
