@@ -89,10 +89,12 @@ class DecisionTreeClassifier(BaseModel):
             self.y = self.y[:, np.newaxis]
         elif getattr(self, 'tree_type') == 'multilabel_ovo':
             self.y = self._ovo_split(self.y)
+            if not hasattr(self, 'balance_coeff'):
+                self.balance_coeff = getattr(self, 'num_classes')//2
         elif getattr(self, 'tree_type') == 'multilabel_ovr':
             self.y = self.get_probabilities(self.y)
             if not hasattr(self, 'balance_coeff'):
-                self.balance_coeff = getattr(self, 'num_classes')//2
+                self.balance_coeff = getattr(self, 'num_classes')
         else:
             raise AssertionError(
                 f"Unknown tree type: '{getattr(self, 'tree_type')}'")
@@ -103,15 +105,10 @@ class DecisionTreeClassifier(BaseModel):
 
         for i in range(self.y.shape[1]):
             data = np.hstack((self.x, self.y[:, i][:, np.newaxis]))
-            data = self._pick_data(data)
 
             self.tree_root.append(self.build_tree(0, data))
             if hasattr(self, '_tick'):
                 self._tick()
-
-    def _pick_data(self, data):
-        is_legit = data[:, -1] >= 0
-        return data[is_legit]
 
     def _return_ranges(self, min_val: float, max_val: float, mean_val: float, num: int):
         num = (num+1)//2
@@ -176,8 +173,8 @@ class DecisionTreeClassifier(BaseModel):
             val1, val2 = vals
             out[:, i] = -x
             out[:, i][out[:, i] == -val1] = 1
-            out[:, i][out[:, i] == -val2] = 0
-            out[:, i][out[:, i] < 0] = -1
+            out[:, i][out[:, i] == -val2] = -1
+            out[:, i][out[:, i] < 0] = 0
 
         return out
 
@@ -258,18 +255,17 @@ class DecisionTreeClassifier(BaseModel):
             bal_true = 1
             bal_false = 1/balance_coeff
 
-        l_counts = np.unique(left[:, -1], return_counts=True)[1]
-        r_counts = np.unique(right[:, -1], return_counts=True)[1]
+        l_index, l_counts = np.unique(left[:, -1], return_counts=True)
+        r_index, r_counts = np.unique(right[:, -1], return_counts=True)
+
         len_L = l_counts.sum()
         len_R = r_counts.sum()
-        if len(l_counts):
-            l_counts[0] *= bal_false
-            try: l_counts[1] *= bal_true; 
-            except (IndexError): pass;
-        if len(r_counts):
-            r_counts[0] *= bal_false
-            try: l_counts[1] *= bal_true; 
-            except (IndexError): pass;
+
+        l_counts[l_index!=0] *= bal_true
+        l_counts[l_index==0] *= bal_false
+
+        r_counts[r_index!=0] *= bal_true
+        r_counts[r_index==0] *= bal_false
 
         if len_L <= min_samples or len_R <= min_samples:
             return 0
