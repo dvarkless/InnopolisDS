@@ -3,6 +3,21 @@ import numpy as np
 
 
 def get_features(img):
+    """
+        Функция получает из изображения полезную визуальную информацию:
+        количество и расположение углов, кругов и линий.
+
+        Алгоритм нахождения углов - Harris Corner detector
+        Кругов - Hough Circles
+        Линий - Hough Lines
+
+        Все настройки подобраны на получение максимально возможных
+        деталей.
+
+        input: img: np.ndarray, shape = (784,) from emnist-letters dataset
+
+        output: img_features: np.ndarray shape = (13,) values in range(0, Inf)
+    """
     img = np.resize(img, (28, 28)).astype(np.uint8).T
     corners = cv.goodFeaturesToTrack(
         img, 25, 0.05, 4, useHarrisDetector=True, k=-0.09)
@@ -67,7 +82,13 @@ def get_features(img):
         ]  # len() = 13
     )
 
-def convert_to_emnist(img):
+def convert_to_emnist(img: np.ndarray):
+    """
+        Конвертирует изображение, чтобы оно соответствовало таковым из
+        датасета emnist-letters
+        input: np.ndarray - shape(N,)
+        output: np.ndarray - shape(N,)
+    """
     img = np.resize(img, (28, 28)).astype(np.uint8).T
     return get_plain_data(img)
 
