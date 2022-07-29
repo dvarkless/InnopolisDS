@@ -4,11 +4,21 @@ from typing import Any
 import numpy as np
 from image_feature_detector import *
 from metrics import *
-from model_base import BaseModel
+from model_base import BaseModel, inval_check
 from model_runner import ModelRunner
 
 
 class Question:
+    """
+    Класс, содержащий информацию об узле Решающего дерева.
+
+    При вызове происходит рекурсивный вызов узлов, стоящих ниже вдоль дерева.
+    Вызывается левая ветка, если узел ответил отрицательно на поступившие данные или
+    вызывается правая ветка, если ответил положительно.
+
+    При конвертации в строку отображает всю содержащуюся в узле полезную информацию.
+    """
+
     def __init__(self, level: int, feature: int, question_val: float) -> None:
         self.level = level
         self.feature = feature
@@ -31,6 +41,19 @@ class Question:
                 (G={self.gini:.2f})((L({self.left_len})->{self.left_mean:.3f})R({self.right_len})->{self.right_mean:.3f})'
 
     def split_by_question(self, data: np.ndarray):
+        """
+            Метод разделяет поданый на него датасет на 2 части на основе
+            ответа на определенного в классе вопроса.
+
+            input:
+                data: np.ndarray - dataset to split
+            output:
+                tuple(data_false, data_true):
+                    data_false: np.ndarray - part of dataset
+                        where class' anwers results in False
+                    data_true: np.ndarray - part of dataset
+                        where class' answer results in True
+        """
         is_true = data[:, self.feature] > self.question_val
         is_false = ~is_true
         self.right_len = data[is_true].shape[0]
@@ -42,11 +65,36 @@ class Question:
         return data[is_false], data[is_true]
 
     def my_gini(self, data: np.ndarray, min_samples: int = 0, balance_coeff: float = 1):
+        """
+            Вычисляет коэффициент Джини для переданного датасета
+
+            inputs:
+                data: np.ndarray - dataset where we want to calculate gini
+                min_samples: int - maximum size of dataset to ignore and return 0
+                balance_coeff: float - balance coefficient for datasets, 
+                coeff > 1 - multiply gini coeff for true values side by coeff
+                coeff < 1 - multiply gini coeff for false values side by 1/coeff
+
+            output:
+                self.my_gini: float - gini coefficient
+        """
         self.gini = DecisionTreeClassifier.get_gini(
             *self.split_by_question(data), min_samples, balance_coeff)
         return self.gini
 
     def hold_branches(self, left_branch, right_branch):
+        """
+            Запоминает ссылки на левую и правую ветку дерева для дальнейшего 
+            рекурсивного вызова.
+
+            inputs:
+                left_branch - Question or Leaf class to refer to in case of 
+                              false answer
+                right_branch- Question or Leaf class to refer to in case of 
+                              true answer
+            output:
+                self
+        """
         self.left_branch = left_branch
         self.right_branch = right_branch
 
@@ -54,6 +102,15 @@ class Question:
 
 
 class Leaf:
+    """
+        Класс запоминает среднее значение ответа при тренировки и 
+        возвращает его при вызове. 
+
+        В моделе Решающего дерева называется листом.
+
+        Можно вызывать и конвертировать в строку.
+    """
+
     def __init__(self, level: int, data: np.ndarray) -> None:
         self.level = level
         self.prediction = data[:, -1].mean()
@@ -66,6 +123,10 @@ class Leaf:
 
 
 class DecisionTreeClassifier(BaseModel):
+    """
+        Модель Решающего дерева.
+    """
+
     def __init__(self, custom_params=None) -> None:
         self.must_have_params = [
             'sample_len',
@@ -101,7 +162,7 @@ class DecisionTreeClassifier(BaseModel):
 
         self.tree_root = []
         self.question_list = self._return_ranges(
-            self.x.min(), self.x.max(), self.x.mean(), getattr(self, 'sample_len'))
+            self.x.max(), self.x.mean(), getattr(self, 'sample_len'))
 
         for i in range(self.y.shape[1]):
             data = np.hstack((self.x, self.y[:, i][:, np.newaxis]))
@@ -110,18 +171,44 @@ class DecisionTreeClassifier(BaseModel):
             if hasattr(self, '_tick'):
                 self._tick()
 
-    def _return_ranges(self, min_val: float, max_val: float, mean_val: float, num: int):
-        num = (num+1)//2
-        right = np.geomspace(mean_val, max_val, num=num)
-        if min_val < 0:
-            left = -(np.geomspace(mean_val, -min_val +
-                     mean_val*2, num=num) - mean_val*2)[::-1]
-        else:
-            left = np.geomspace(mean_val, min_val+mean_val/100, num=num)[::-1]
+    @inval_check
+    def _return_ranges(self, max_val: float, mean_val: float, num: int):
+        """
+            Возвращает значения от min_val до max_val с более маленьким шагов в районе mean_val,
+            величина шага примерно соответствует плотности нормального распределения.
 
-        return np.hstack((left, right[1:]))
+            >>> self._return_ranges(5, 2, 10)
+            [0.22  0.94  1.34  1.67  1.92  2.17  2.42  2.68  3.04  3.81]
+        """
+        if num > 500:
+            raise ValueError(f'num is too high {num}, should be less than 500')
+        sample = (max_val-mean_val)/3*(np.random.randn(1000)+mean_val)
+        sample.sort()
+        out = []
+        for i in range(num):
+            low = len(sample)//num*i
+            high = len(sample)//num*(i+1)
+            out.append(sample[low:high].mean())
+
+        return np.array(out)
 
     def build_tree(self, level: int, data: np.ndarray):
+        """
+            При рекурсивном вызове строит Решающее дерево.
+
+            Для входных данных создается узел, потом рекурсивно 
+            строим узлы для левой и правой ветки этого узла.
+            При малом коэффициенте Джини, возвращаем Лист на этом
+            месте.
+
+            inputs:
+                level: int - level of tree node, used in printing
+                data: np.ndarray - training data on current node to
+                                   process
+            output:
+                Question or Leaf class
+
+        """
         window_size = getattr(self, 'window_size')
         # Округляем до ближайшего нечетного
         # Чтобы работало вычисление текущих координат
@@ -154,6 +241,7 @@ class DecisionTreeClassifier(BaseModel):
         elif getattr(self, 'tree_type') == 'multilabel_ovr':
             return self._ovr_choose(out)
 
+    @inval_check
     def _ovr_choose(self, x: np.ndarray):
         """
         Возвращаем позицию наибольшего значения
@@ -166,6 +254,27 @@ class DecisionTreeClassifier(BaseModel):
         return np.argmax(x, axis=1) + 1
 
     def _ovo_split(self, x: np.ndarray):
+        """
+            Разделяем данные на пары для классификатора
+            типа One Vs One.
+
+            Длина возвращаемого массива равна числу комбинаций 
+            по 2 классов во входном массиве.
+
+            При положительном результате в столбце возвращается 1,
+            при отрицательном возвращаем -1, если ответ представляет
+            собой другой класс, возвращаем 0.
+
+                          (1vs2)......
+            [[1],           [1].......
+             [2],   --->    [-1]......
+             [3]]           [0].......
+
+            inputs:
+                x: np.ndarray - input answer data with classes as numbers
+            output:
+                out: np.ndarray - output array 
+        """
         num_count = getattr(self, 'num_classes')
         pairs = list(combinations(range(1, num_count+1), 2))
         out = np.zeros((x.shape[0], len(pairs)))
@@ -179,6 +288,15 @@ class DecisionTreeClassifier(BaseModel):
         return out
 
     def _ovo_choose(self, x: np.ndarray):
+        """
+            Конвертирует полученные ответы от классификатора
+            One vs one в классы.
+
+            inputs:
+                x: np.ndarray - input answer data from ovo
+            output:
+                out: np.ndarray - output array with classes as numbers
+        """
         num_count = getattr(self, 'num_classes')
         out = np.zeros((x.shape[0], num_count))
         for i, vals in enumerate(combinations(range(num_count), 2)):
@@ -188,16 +306,38 @@ class DecisionTreeClassifier(BaseModel):
 
         return self._ovr_choose(out)
 
-    def _array_window(self, arr, x, y, size):
-        ''' Given a 2D-array, returns an nxn array whose "center" element is arr[x,y]'''
+    def _array_window(self, arr: np.ndarray, x: int, y: int, size: int):
+        """
+            Создает окно в массиве размером size с центром в x, y
+            
+            NOT USED
+            inputs:
+                arr: np.ndarray - array to slice from
+                x: int - center x
+                y: int - center y
+                size: int - window size
+            output:
+                out: np.ndarray - smaller array
+        """
         arr = np.roll(np.roll(arr, shift=-x+1, axis=0), shift=-y+1, axis=1)
         return arr[:size, :size]
 
-    def create_node(self, data: np.ndarray, level: int, window_size: int = -1):
-        feature_len = self.x.shape[1]
+    def create_node(self, data: np.ndarray, level: int):
+        """
+            Формулирует вопрос для заданного набора данных.
 
-        curr_x = feature_len//2
-        curr_y = len(self.question_list)//2
+            Использует коэффициент Джини для разделения данных.
+
+            TODO: Add parallel computing
+
+            inputs:
+                data: np.ndarray - input data without answers
+                level: int - current tree level
+            output:
+                Question class with optimal question (x > question_list(y)?)
+        """
+
+        feature_len = self.x.shape[1]
 
         possible_questions = np.ones(
             (feature_len, len(self.question_list))) * self.question_list
@@ -205,41 +345,28 @@ class DecisionTreeClassifier(BaseModel):
             (feature_len, len(self.question_list))) * np.arange(feature_len)[:, np.newaxis]
         feature_array = feature_array.astype(np.int64)
 
-        for _ in range(25):
-            if window_size > 0:
-                question_window = self._array_window(
-                    possible_questions, curr_x, curr_y, window_size)
-                feature_window = self._array_window(
-                    feature_array, curr_x, curr_y, window_size)
-            else:
-                question_window = possible_questions
-                feature_window = feature_array
+        v_gini = np.vectorize(self.calculate_gini)
+        v_gini.excluded.add(0)
+        local_gini = v_gini(data, feature_array, possible_questions)
 
-            v_gini = np.vectorize(self.calculate_gini)
-            v_gini.excluded.add(0)
-            local_gini = v_gini(
-                data, feature_window, question_window)
-            # print(f'max local_gini = {local_gini.max()}')
-            if local_gini.max() == 0:
-                break
+        max_ind = np.unravel_index(
+            np.argmax(local_gini, axis=np.newaxis), local_gini.shape)
+        x, y = [int(val) for val in max_ind]
 
-            max_ind = np.unravel_index(
-                np.argmax(local_gini, axis=None), local_gini.shape)
-            if window_size == -1:
-                curr_x, curr_y = [int(val) for val in max_ind]
-                break
+        return Question(level, x, self.question_list[y])
 
-            max_ind_global = (max_ind[0] + curr_x - window_size//2,
-                              max_ind[1] + curr_y - window_size//2)
-            curr_x, curr_y = [int(max(pos, 0)) for pos in max_ind_global]
-            # print(f'max_global = {max_ind_global}')
-            # print(f'current = {(curr_x, curr_y)}')
-            if max_ind_global == (curr_x, curr_y):
-                break
-
-        return Question(level, curr_x, self.question_list[curr_y])
-
+    @inval_check
     def calculate_gini(self, data: np.ndarray, feature: int, question_val: float):
+        """
+            Обертка для метода, расчитывающего коэффициент Джини
+
+            inputs:
+                data: np.ndarray - input data without answers
+                feature: int - column number in data
+                question_val: float - threshold number for data
+            output:
+                gini_val: float - gini value
+        """
         my_question = Question(0, feature, question_val)
 
         left, right = my_question.split_by_question(data)
@@ -247,7 +374,27 @@ class DecisionTreeClassifier(BaseModel):
                              getattr(self, 'balance_coeff', 1))
 
     @staticmethod
-    def get_gini(left: np.ndarray, right: np.ndarray, min_samples: float = 0, balance_coeff: float = 1):
+    def get_gini(left: np.ndarray, right: np.ndarray, min_samples: int = 0, balance_coeff: float = 1):
+        """
+            Метод для расчета коэффициента Джини.
+
+            Используемая формула:
+                1/L * SUM_n_i=1(l_count_i*w_i) + 1/R * SUM_n_i=1(r_count_i*w_i) -> max
+
+                ,где L, R - количество элементов в массивах
+                l_count, r_count - количество уникальных элементов в массивах
+                w_i - вес для конкретного значения
+
+            inputs:
+                left: np.ndarray - output data from question, false branch
+                right: np.ndarray - output data from question, true branch
+                min_samples: int - return 0 if length of one of the datasets 
+                is smaller than it
+                balance_coeff: float - balance coefficient for datasets, 
+                coeff > 1 - multiply gini coeff for true values side by coeff
+                coeff < 1 - multiply gini coeff for false values side by 1/coeff
+
+        """
         if balance_coeff >= 1:
             bal_true = balance_coeff
             bal_false = 1
@@ -261,17 +408,20 @@ class DecisionTreeClassifier(BaseModel):
         len_L = l_counts.sum()
         len_R = r_counts.sum()
 
-        l_counts[l_index!=0] *= bal_true
-        l_counts[l_index==0] *= bal_false
+        l_counts[l_index != 0] *= bal_true
+        l_counts[l_index == 0] *= bal_false
 
-        r_counts[r_index!=0] *= bal_true
-        r_counts[r_index==0] *= bal_false
+        r_counts[r_index != 0] *= bal_true
+        r_counts[r_index == 0] *= bal_false
 
         if len_L <= min_samples or len_R <= min_samples:
             return 0
         return np.sum(np.power(l_counts, 2))/len_L + np.sum(np.power(r_counts, 2))/len_R
 
     def print_tree(self):
+        """
+            Вывод информации о решающем дереве в терминал
+        """
         print('========DecisionTreeModel=======')
         print(f'Parameters are: ')
         for name in self.must_have_params:
@@ -283,7 +433,9 @@ class DecisionTreeClassifier(BaseModel):
             self.__print_tree(branch)
 
     def __print_tree(self, node, spacing=""):
-        """World's most elegant tree printing function."""
+        """
+            Рекурсивный вывод информации о решающем дереве в терминал
+        """
 
         # Print the question at this node
         print(spacing + str(node))
@@ -297,41 +449,3 @@ class DecisionTreeClassifier(BaseModel):
         # Call this function recursively on the false branch
         print(spacing + '--> False:')
         self.__print_tree(node.left_branch, spacing + "  ")
-
-
-if __name__ == "__main__":
-    training_data = np.genfromtxt("datasets/light-train.csv",
-                                  delimiter=",", filling_values=0)
-    evaluation_data = np.genfromtxt(
-        "datasets/light-test.csv", delimiter=",", filling_values=0)
-
-    evaluation_input = evaluation_data[:, 1:]
-    evaluation_answers = evaluation_data[:, 0]
-
-    # my_metrics = [return_accuracy, return_recall, return_precision, return_f1]
-    my_metrics = [return_accuracy, predictions_mean, predictions_std]
-    PCA_severe = PCA_transform(49).fit(
-        training_data, answer_column=True)  # x16
-    PCA_lossy = PCA_transform(12).fit(
-        training_data, answer_column=True)  # x16
-
-    hp = {
-        'data_converter': PCA_severe,
-        'sample_len': 16,
-        'num_classes': 26,
-        'window_size': -1,
-        'min_samples': 4,
-        'max_depth': 5,
-        'tree_type': 'multilabel_ovo',
-
-    }
-
-    TreeRunner = ModelRunner(DecisionTreeClassifier,
-                             defaults=hp, metrics=my_metrics, responsive_bar=True)
-    params_to_change = {
-        'data_converter': [PCA_lossy]
-    }
-    TreeRunner.run(training_data, evaluation_input,
-                   evaluation_answers, params_to_change, one_vs_one=False)
-    # TreeRunner.model.print_tree()
-    input()
