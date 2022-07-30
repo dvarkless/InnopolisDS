@@ -206,7 +206,7 @@ class DecisionTreeClassifier(BaseModel):
         """
         if num > 500:
             raise ValueError(f'num is too high {num}, should be less than 500')
-        sample = (max_val-mean_val)/3*(np.random.randn(1000)+mean_val)
+        sample = ((max_val-mean_val)/3*np.random.randn(1000))+mean_val
         sample.sort()
         out = []
         for i in range(num):
@@ -424,18 +424,19 @@ class DecisionTreeClassifier(BaseModel):
         l_index, l_counts = np.unique(left[:, -1], return_counts=True)
         r_index, r_counts = np.unique(right[:, -1], return_counts=True)
 
-        len_L = l_counts.sum()
-        len_R = r_counts.sum()
+        sum_L = l_counts.sum()
+        sum_R = r_counts.sum()
 
         l_counts[l_index != 0] *= bal_true
         l_counts[l_index == 0] *= bal_false
 
         r_counts[r_index != 0] *= bal_true
         r_counts[r_index == 0] *= bal_false
-
-        if len_L <= min_samples or len_R <= min_samples:
+        if np.array_equal(l_index, r_index) and len(l_index) == 1:
             return 0
-        return np.sum(np.power(l_counts, 2))/len_L + np.sum(np.power(r_counts, 2))/len_R
+        if sum_L <= min_samples or sum_R <= min_samples:
+            return 0
+        return np.sum(np.power(l_counts, 2))/sum_L + np.sum(np.power(r_counts, 2))/sum_R
 
     def print_tree(self):
         """
@@ -446,6 +447,8 @@ class DecisionTreeClassifier(BaseModel):
         for name in self.must_have_params:
             val = getattr(self, name)
             print(f'{name} = {val}')
+        if hasattr(self, 'balance_coeff'):
+            print(f'balance_coeff = {getattr(self,"balance_coeff")}')
         print('===Tree structure:===')
         for i, branch in enumerate(self.tree_root):
             print(f'===================={i}=======================')
