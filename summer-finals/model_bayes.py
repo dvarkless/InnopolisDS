@@ -18,6 +18,10 @@ class BayesianClassifier(BaseModel):
 
         Для корректного расчета вероятностей параметров, входные значения должны быть равны
         0 или 1
+
+        Parameters:
+            Arbitrary:
+                num_classes: int - number of classes in dataset
     """
 
     def __init__(self, custom_params=None):
@@ -42,5 +46,6 @@ class BayesianClassifier(BaseModel):
         return self
 
     def predict(self, x):
+        # Конвертируем значения
         self.data = x
         return self.get_labels(self._softmax(self.data @ self.params))
