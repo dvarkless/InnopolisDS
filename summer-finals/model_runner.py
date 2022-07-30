@@ -88,6 +88,7 @@ class ModelRunner:
         self._models = []
         curr_params = dict()
         if one_vs_one:
+            # Проверка на наличие единственного значения в списке
             if len(list(params.values())) <= 1:
                 pairs = list(*params.values())
             else:
@@ -99,6 +100,7 @@ class ModelRunner:
             else:
                 len_model_ticks = 1
             with alive_bar(len(list(pairs)*len_model_ticks), title=f'Проверка модели {self.model_class.__name__}', force_tty=True, bar='filling') as bar:
+                # Распаковка параметров
                 for vals in pairs:
                     for i, key in enumerate(params.keys()):
                         try:
@@ -114,7 +116,7 @@ class ModelRunner:
                     self._run_method(train, eval_input,
                                      eval_ans, curr_params, bar)
                     print('-----End with-----')
-                    bar()
+                    bar()  # продвижение полосы прогресса
         else:
             iter_lens = [len(val) for val in params.values()]
             if self._responsive_bar:
@@ -140,8 +142,8 @@ class ModelRunner:
                     self._parameters_data.append(list(curr_params.values()))
                     self._run_method(train, eval_input,
                                      eval_ans, curr_params, bar)
-                    bar()
                     print('-----End with-----')
+                    bar()  # продвижение полосы прогресса
 
         print("===============RESULTS=================")
         pos = self._highest_metric_pos(self._metric_data)
@@ -229,6 +231,12 @@ class ModelRunner:
         return score.index(max(score))
 
     def get_models(self):
+        """
+            Получить список со всеми использованными моделями
+
+            output - list of all calculated models
+        """
+
         return self._models
 
     def get_metrics(self):
