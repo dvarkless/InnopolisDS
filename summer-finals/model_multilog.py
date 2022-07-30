@@ -1,5 +1,5 @@
 import numpy as np
-from model_base import BaseModel
+from model_base import BaseModel, inval_check
 
 
 class MultilogRegression(BaseModel):
@@ -7,7 +7,7 @@ class MultilogRegression(BaseModel):
         Модель мультиноминальной логистической регрессии.
 
         Принцип работы:
-            Обучающая выборка делится на батчи случайным образом, происходит расчет
+            Обучающая выборка делится на мини выборки случайным образом, происходит расчет
             ответов по формуле:
                 y[N, n_classes] = softmax(
                     X[N, n_input] @ theta[n_input, n_classes])
@@ -19,22 +19,30 @@ class MultilogRegression(BaseModel):
             Далее происходит минимизация коэффициентов модели (model.params)
         с помощью градиентного спуска.
 
-            inputs:
-                data_converter - look in parent's class (BaseModel)
-                custom_params - custom parameters for this model:
-                                must_have_params = [
-                                    'reg', 'metrics', 'reg_w', 'debug']
-                                possible_params = ['weight_init']
+            parameters:
+                Arbitrary:
+                    data_converter - function-converter for input data
+                    shift_column: bool - use a column of constants to act as additive
+                                for folmula: wx_1 + wx_2 .... + wx_n + b = Y
+                    normalization: bool - use normalization for input values
+                    num_classes: int - number of classes in dataset
+                    learning_rate: float - how fast model will fit
+                    batch_size: int - size of mini-datasets to process while fitting.
+                                      helps avoid overfitting
+                    epochs: int - count of gradient descent steps for whole dataset
+                    reg: str, function - regularization function (l1 or l2)
+                Optional:
+                    reg_w: float - regularization coefficient
+
     """
 
     def __init__(self, custom_params=None):
+        self.must_have_params = ['data_converter', 'shift_column', 'normalization',
+                                 'num_classes', 'learning_rate', 'batch_size', 'epochs',
+                                 'reg']
         super().__init__(custom_params=custom_params)
 
-        must_have_params = ['shift_column', 'normalization',
-                            'num_classes', 'learning_rate', 'batch_size', 'epochs',
-                            'reg']
-        self.assert_have(must_have_params)
-
+    @inval_check
     def _compute_gradient(self, x, y_pred, y, lr=0.01, additive=None) -> np.ndarray:
         """
             Метод для расчета шага градиентного спуска.
@@ -78,6 +86,7 @@ class MultilogRegression(BaseModel):
         # или оставляем дефолтные
         epochs = getattr(self, "epochs", 100)
 
+        # Разбиваем датасет на входные данные и ответы
         y, x = self._splice_data(data)
         y = self.get_probabilities(y)
         num_samples = x.shape[0]
@@ -92,12 +101,14 @@ class MultilogRegression(BaseModel):
             )
 
         for epoch in range(epochs):
+            # Разбиваем датасет на мини выборки
             indexes = np.random.permutation(num_samples)
             y = y[indexes]
             x = x[indexes]
 
             for x_batch, y_batch in self._iter_batches(x, y):
                 y_pred = self._forward(x_batch)
+                # Регуляризация
                 reg_val = 0
                 if getattr(self, 'reg', False):
                     reg_w = getattr(self, 'reg_w')
@@ -105,7 +116,7 @@ class MultilogRegression(BaseModel):
                         reg_val = self.l2_reg(reg_w)
                     if getattr(self, 'reg', '') == 'l2':
                         reg_val = self.l2_reg(reg_w)
-
+                # Градиентный спуск
                 self.params -= self._compute_gradient(
                     x, y_pred, y_batch, lr=learning_rate, additive=reg_val
                 )
@@ -142,5 +153,6 @@ class MultilogRegression(BaseModel):
             output:
                 y - predicted labels
         """
+        # Конвертируем значения
         self.data = x
         return self.get_labels(self._forward(self.data))

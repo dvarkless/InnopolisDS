@@ -1,5 +1,5 @@
 import numpy as np
-from model_base import BaseModel
+from model_base import BaseModel, inval_check
 
 
 class SVM_Model(BaseModel):
@@ -19,6 +19,19 @@ class SVM_Model(BaseModel):
 
         Для работы функции стоимости надо ответы на тренировочной выборке
         подавать в виде: [-1, -1, 1, -1],  где позиция единицы - номер класса точки.
+
+        Parameters:
+            Arbitrary:
+                data_converter - function-converter for input data
+                shift_column: bool - use a column of constants to act as additive
+                            for folmula: wx_1 + wx_2 .... + wx_n + b = Y
+                normalization: bool - use normalization for input values
+                num_classes: int - number of classes in dataset
+                learning_rate: float - how fast model will fit
+                batch_size: int - size of mini-datasets to process while fitting.
+                                  helps avoid overfitting
+                epochs: int - count of gradient descent steps for whole dataset
+                regularization: float - regularization strength for loss function
 
     """
 
@@ -42,14 +55,17 @@ class SVM_Model(BaseModel):
         debug = getattr(self, "debug", False)
 
         for epoch in range(epochs):
+            # Разделение на мини выборки
             indexes = np.random.permutation(num_samples)
             y = y[indexes]
             x = x[indexes]
             for x_batch, y_batch in self._iter_batches(x, y):
                 y_pred = self._forward(x_batch)
+                # Градиентный спуск
                 self.params -= self._compute_gradient(
                     x_batch, y_pred, y_batch, learning_rate, k=k)
 
+            # Вычисление потерь
             loss = self.soft_margin_loss(self._forward(x), y)
 
             if hasattr(self, '_tick'):
@@ -68,6 +84,7 @@ class SVM_Model(BaseModel):
 
         return self
 
+    @inval_check
     def hinge_loss(self, y_pred, y):
         """
             Применяется формула:
@@ -82,10 +99,11 @@ class SVM_Model(BaseModel):
         """
         return np.vectorize(lambda x: x if x > 0 else 0)(1-y*y_pred).mean(axis=0)
 
+    @inval_check
     def soft_margin_loss(self, y_pred, y, k=1):
         """
             Формула:
-            J = k * ||w||^2 + 1/N * Sum(max(0, 1 - y_i*(w*x_i+b)))
+            J = k * ||w||^2 + 1/N * SUM_n_i=1(max(0, 1 - y_i*(w*x_i+b)))
 
             inputs:
                 y_pred - model's output
@@ -131,14 +149,28 @@ class SVM_Model(BaseModel):
         return out
 
     def _compute_gradient(self, x, y_pred, y, lr=0.01, k=1) -> np.ndarray:
+        """
+            Метод вычисляет градиент используя функцию потерь soft margin loss
+
+            inputs:
+                x: np.ndarray - model's input
+                y_pred: np.ndarray - model's output
+                y: np.ndarray - true labels
+                lr: float - learning rate
+                k: float - regularization coefficient for loss function
+        """
         diff = np.zeros_like(self.params)
         diff = self.params - (k * self.soft_margin_loss(y_pred, y) * (x.T @ y))
 
         return diff * lr
 
     def _forward(self, x):
+        """
+            Рассчитывает входную точку без конверсии
+        """
         return x @ self.params
 
     def predict(self, x):
+        # Конвертируем значения
         self.data = x
         return self._ovr_choose(self.data @ self.params)

@@ -3,6 +3,19 @@ from model_base import BaseModel
 
 
 class KnnModel(BaseModel):
+    """
+       Модель К ближайших соседей.
+
+       При обучении запоминает тренировочные данные.
+       При предсказании выводит класс ближайшей точки для переданной
+       точки из массива тренировочных данных.
+
+       parameters:
+           Arbitrary:
+               data_converter - function-converter for input data
+               k - number of neighbors
+
+    """
     def __init__(self, custom_params=None) -> None:
         super().__init__(custom_params)
         self.assert_have(['k'])
@@ -14,16 +27,15 @@ class KnnModel(BaseModel):
         return self
 
     def predict(self, new_points):
+        # Конвертируем значения
         self.data = new_points
         predictions = np.zeros(self.data.shape[0])
-        # Loop over each new point to classify
         k = getattr(self, 'k')
         for i, point in enumerate(self.data):
             distances = self._calculate_distances(point)
-            # Finds the k smallest distances and the corresponding points' labels
+            # Находим К наименьших расстояния до точек и их классы
             label_neighbors = self.answer[np.argpartition(distances, k)[:k]]
-
-            # Finds the majority of k nearest neighbors
+            # Записываем наиболее частое значение
             predictions[i] = np.bincount(
                 label_neighbors.astype("int64")).argmax()
 
@@ -32,8 +44,16 @@ class KnnModel(BaseModel):
         return predictions
 
     def _calculate_distances(self, new_point):
-        # Expand by repeating to increase speed (avoid looping)
+        """
+            Метод расчитывает евклидовы расстояния от переданной точки до
+            каждой точки в тренировочном наборе данных и выводит их.
+
+            inputs:
+                new_point: np.ndarray - 1 row of data to calculate distance
+            output:
+                euclidean_distance: np.ndarray - array of distances (N_train,)
+        """
+        # Копируем входную точку self.n раз
         new_point = np.resize(new_point, (self.n, new_point.shape[0]))
-        # euclidean_distance = (self.trained_input - new_point)**2
         euclidean_distance = np.sum((self.train_data - new_point) ** 2, axis=1)
         return euclidean_distance

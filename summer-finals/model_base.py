@@ -323,7 +323,7 @@ class BaseModel:
 
         raise NotImplementedError
 
-    def fit(data):
+    def fit(self, data):
         """
             Метод разделеняет входную выборку на подвыборки и 
             находит оптимальные параметры для расчета.
@@ -345,12 +345,13 @@ class BaseModel:
 
 
 def inval_check(func):
-    @functools.wraps
+    @functools.wraps(func)
     def _wrapper(self, *args, **kwargs):
-        out = func()
+        out = func(self, *args, **kwargs)
         if isinstance(out, np.ndarray):
             np.vectorize(BaseModel.wierd_vals_detector)(out)
         elif isinstance(out, list) or isinstance(out, tuple):
             if isinstance(out[0], np.ndarray):
                 np.vectorize(BaseModel.wierd_vals_detector)(out)
+        return out
     return _wrapper

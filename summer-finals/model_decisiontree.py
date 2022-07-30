@@ -2,21 +2,18 @@ from itertools import combinations
 from typing import Any
 
 import numpy as np
-from image_feature_detector import *
-from metrics import *
 from model_base import BaseModel, inval_check
-from model_runner import ModelRunner
 
 
 class Question:
     """
-    Класс, содержащий информацию об узле Решающего дерева.
+        Класс, содержащий информацию об узле Решающего дерева.
 
-    При вызове происходит рекурсивный вызов узлов, стоящих ниже вдоль дерева.
-    Вызывается левая ветка, если узел ответил отрицательно на поступившие данные или
-    вызывается правая ветка, если ответил положительно.
+        При вызове происходит рекурсивный вызов узлов, стоящих ниже вдоль дерева.
+        Вызывается левая ветка, если узел ответил отрицательно на поступившие данные или
+        вызывается правая ветка, если ответил положительно.
 
-    При конвертации в строку отображает всю содержащуюся в узле полезную информацию.
+        При конвертации в строку отображает всю содержащуюся в узле полезную информацию.
     """
 
     def __init__(self, level: int, feature: int, question_val: float) -> None:
@@ -116,6 +113,7 @@ class Leaf:
         self.prediction = data[:, -1].mean()
 
     def __call__(self, row: Any):
+        # Неважно что на входе
         return self.prediction
 
     def __repr__(self):
@@ -125,18 +123,36 @@ class Leaf:
 class DecisionTreeClassifier(BaseModel):
     """
         Модель Решающего дерева.
+
+        Модель бинарной классификации, обучающаяся с учителем. Проверяет входные данные
+        по нескольким критериям и выдает ответ на основе проверки критериев.
+
+        Узлы дерева генерируются на основе коэффициента Джини (алгоритм CART).
+        Узел разделяет датасет на основе этого вопроса таким образом, что полученные
+        половины датасета получаются максимально однородными. Далее для двух половинок 
+        рекурсивно генерируются новые узлы и так до тех пор, пока части датасетов не станут
+        полностью однородными. В данном случае, на этих местах генерируюится листы.
+
+        Parameters:
+            Arbitrary:
+                data_converter: function - function-converter for input data
+                sample_len: int - number of questions to choose from. Bigger - more precise and slower
+                num_classes: int - number of classes for multiclass classification
+                min_samples: int - returns for small while tree building then dataset is less 
+                                   or equal to this number (pre-pruning)
+                max_depth: int - maximum depth of tree, return leafs then exceeded (pre-prunning) 
+                tree_type: str - Tree type chosen from ('binary', 'multilabel_ovr', 'multilabel_ovr')
+
     """
 
     def __init__(self, custom_params=None) -> None:
         self.must_have_params = [
             'sample_len',
             'num_classes',
-            'window_size',
             'min_samples',
             'max_depth',
             'tree_type',
         ]
-
         super().__init__(custom_params)
         self.tree_root = []
 
@@ -145,7 +161,9 @@ class DecisionTreeClassifier(BaseModel):
                 f'Balance coefficient could not be negative or zero, got {getattr(self,"balance_coeff")}')
 
     def fit(self, dataset: np.ndarray):
+        # Разбиваем датасет
         self.y, self.x = self._splice_data(dataset)
+        # Формируем массив ответов на основе типа дерева
         if getattr(self, 'tree_type') in ('binary', 'multilabel'):
             self.y = self.y[:, np.newaxis]
         elif getattr(self, 'tree_type') == 'multilabel_ovo':
@@ -164,6 +182,8 @@ class DecisionTreeClassifier(BaseModel):
         self.question_list = self._return_ranges(
             self.x.max(), self.x.mean(), getattr(self, 'sample_len'))
 
+        # Строим дерево, для каждого столбца формируем отдельные
+        # массивы ответов
         for i in range(self.y.shape[1]):
             data = np.hstack((self.x, self.y[:, i][:, np.newaxis]))
 
@@ -179,6 +199,10 @@ class DecisionTreeClassifier(BaseModel):
 
             >>> self._return_ranges(5, 2, 10)
             [0.22  0.94  1.34  1.67  1.92  2.17  2.42  2.68  3.04  3.81]
+            inputs:
+                max_val: float - maximum value of input dataset
+                mean_val: float - mean value of input dataset
+                num: int - number of values in output range we want
         """
         if num > 500:
             raise ValueError(f'num is too high {num}, should be less than 500')
@@ -209,12 +233,7 @@ class DecisionTreeClassifier(BaseModel):
                 Question or Leaf class
 
         """
-        window_size = getattr(self, 'window_size')
-        # Округляем до ближайшего нечетного
-        # Чтобы работало вычисление текущих координат
-        window_size = round(window_size+0.5)-1
-
-        my_question = self.create_node(data, level, window_size)
+        my_question = self.create_node(data, level)
 
         if my_question.my_gini(data, getattr(self, 'min_samples'), getattr(self, 'balance_coeff', 1)) == 0:
             return Leaf(level, data)
@@ -309,8 +328,8 @@ class DecisionTreeClassifier(BaseModel):
     def _array_window(self, arr: np.ndarray, x: int, y: int, size: int):
         """
             Создает окно в массиве размером size с центром в x, y
-            
-            NOT USED
+
+            !!!NOT USED!!!
             inputs:
                 arr: np.ndarray - array to slice from
                 x: int - center x
