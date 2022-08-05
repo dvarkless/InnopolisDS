@@ -190,7 +190,8 @@ class DecisionTreeClassifier(BaseModel):
             self.x.max(), self.x.mean(), getattr(self, 'sample_len'))
 
         # Multiprocessing module cannot process proxy objects
-        delattr(self, '_tick')
+        if hasattr(self, '_tick'):
+            del self._tick
         with parallel.ProcessPoolExecutor() as executor:
             results = executor.map(
                 self.grow_branch, range(self.y.shape[1]), timeout=60)
