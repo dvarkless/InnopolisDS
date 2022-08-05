@@ -1,8 +1,15 @@
+import concurrent.futures as parallel
 from itertools import combinations
 from typing import Any
 
 import numpy as np
+from image_feature_detector import (PCA_transform, convert_to_emnist,
+                                    get_features, get_plain_data,
+                                    threshold_mid)
+from metrics import (return_accuracy, return_f1, return_precision,
+                     return_recall, return_roc_auc_ovr, show_metrics_matrix)
 from model_base import BaseModel, inval_check
+from model_runner import ModelRunner
 
 
 class Question:
@@ -182,14 +189,30 @@ class DecisionTreeClassifier(BaseModel):
         self.question_list = self._return_ranges(
             self.x.max(), self.x.mean(), getattr(self, 'sample_len'))
 
+        # Multiprocessing module cannot process proxy objects
+        delattr(self, '_tick')
+        with parallel.ProcessPoolExecutor() as executor:
+            results = executor.map(
+                self.grow_branch, range(self.y.shape[1]), timeout=60)
+
+        self.tree_root = list(results)
+
+    def grow_branch(self, num_branch):
+        """
+            Строим ствол дерева для одного столбца.
+
+            Метод введен для параллелизации.
+
+            inputs:
+                num_branch: int - current branch number
+            output:
+                Question or Leaf class
+        """
         # Строим дерево, для каждого столбца формируем отдельные
         # массивы ответов
-        for i in range(self.y.shape[1]):
-            data = np.hstack((self.x, self.y[:, i][:, np.newaxis]))
+        data = np.hstack((self.x, self.y[:, num_branch][:, np.newaxis]))
 
-            self.tree_root.append(self.build_tree(0, data))
-            if hasattr(self, '_tick'):
-                self._tick()
+        return self.build_tree(0, data)
 
     @inval_check
     def _return_ranges(self, max_val: float, mean_val: float, num: int):
@@ -471,3 +494,49 @@ class DecisionTreeClassifier(BaseModel):
         # Call this function recursively on the false branch
         print(spacing + '--> False:')
         self.__print_tree(node.left_branch, spacing + "  ")
+
+
+if __name__ == "__main__":
+    np.seterr(invalid="ignore")
+
+    training_data_lite = np.genfromtxt("datasets/light-train.csv",
+                                       delimiter=",", filling_values=0)
+    evaluation_data_lite = np.genfromtxt(
+        "datasets/medium-test.csv", delimiter=",", filling_values=0)
+    evaluation_input_lite = evaluation_data_lite[:, 1:]
+    evaluation_answers_lite = evaluation_data_lite[:, 0]
+
+    datapack_lite = (training_data_lite, evaluation_input_lite,
+                     evaluation_answers_lite)
+
+    my_metrics = [return_accuracy, return_recall, return_precision, return_f1]
+
+    # x32 - выходной массив имеет в 32 раза меньше размерности
+    PCA_extreme = PCA_transform(24).fit(training_data_lite)
+
+    hp = {
+        'data_converter': PCA_extreme,
+        'sample_len': 32,
+        'num_classes': 26,
+        'window_size': -1,
+        'min_samples': 3,
+        'max_depth': 7,
+        'tree_type': 'multilabel_ovr',
+    }
+
+    TreeRunner = ModelRunner(DecisionTreeClassifier,
+                             defaults=hp, metrics=my_metrics, responsive_bar=True)
+    params_to_change = {
+        'sample_len': [32],
+    }
+
+    import cProfile
+    import pstats
+
+    with cProfile.Profile() as pr:
+        TreeRunner.run(*datapack_lite, params_to_change, one_vs_one=True)
+
+    stats = pstats.Stats(pr)
+    stats.sort_stats(pstats.SortKey.TIME)
+    # stats.print_stats()
+    # stats.dump_stats(filename='my_stats.prof')
