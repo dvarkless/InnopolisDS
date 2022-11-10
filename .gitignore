@@ -1,5 +1,14 @@
 # test model and misc
 scratch/
+generator*
+discriminator*
+models/
+training_results/
+test_input/
+test_output/
+statistics/
+data/
+log*
 
 # big file
 emnist-letters-train.csv
