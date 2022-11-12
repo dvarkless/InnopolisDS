@@ -74,15 +74,16 @@ class Discriminator(nn.Module):
 
             nn.Conv2d(1024, 1, kernel_size=1),
             nn.Flatten(),
+            nn.LazyLinear(1024),
+            nn.LeakyReLU(0.2),
             nn.LazyLinear(1),
-            nn.Sigmoid(),
+            nn.Tanh(),
         )
 
     def forward(self, x):
         net_out = self.net(x)
-        # batch_size = x.size(0)
-        # net_out = self.net(x).view(batch_size)
-        # net_out = torch.sigmoid(net_out)
+        # Punish D overconfidence
+        net_out = (net_out * 0.9)/2 + 0.5
         return net_out
 
 

@@ -4,21 +4,20 @@ from math import log10
 from pathlib import Path
 
 import pandas as pd
+import pytorch_ssim
 import shutup
 import torch
 import torch.optim as optim
 import torchvision.utils as utils
 from alive_progress import alive_it
-from matplotlib import pyplot as plt
-from torch.autograd import Variable
-# from torch.autograd.anomaly_mode import set_detect_anomaly
-from torch.utils.data import DataLoader
-
-import pytorch_ssim
 from data_utils import (TrainDatasetFromFolder, ValDatasetFromFolder,
                         display_transform, get_logging_handler)
 from loss import AdversarialLoss, FullLoss, MSELoss
+from matplotlib import pyplot as plt
 from model import Discriminator, Generator
+from torch.autograd import Variable
+# from torch.autograd.anomaly_mode import set_detect_anomaly
+from torch.utils.data import DataLoader
 
 shutup.please()
 
@@ -120,7 +119,8 @@ class Trainer:
             del self.disc_optimizer
 
     def fit(self, train_hr_dir, eval_hr_dir, batch_size=32,
-            data_augmentation_type='plain', model_tag=None):
+            data_augmentation_type='plain', model_tag=None,
+            save_g_as=None, save_d_as=None):
         if model_tag:
             self.model_tag = model_tag
         train_hr_dir = Path(train_hr_dir)
@@ -179,23 +179,25 @@ class Trainer:
             self.trainer_results.append(results.copy())
             del results
 
-        self._save_models(epoch+1)
+        self._save_models(epoch+1, save_g_as, save_d_as)
 
-    def _save_models(self, epoch: int = 0):
+    def _save_models(self, epoch: int = 0, g_name=None, d_name=None):
         msg = 'saving models and history...'
         self.logger.info(msg)
 
         models_path = Path('models')
         if not models_path.exists():
             models_path.mkdir()
-
-        g_name = f'Generator_{date.today().isoformat()}'\
-            + f'_epoch{epoch}'*bool(epoch)
-        d_name = f'Discriminator_{date.today().isoformat()}'\
-            + f'_epoch{epoch}'*bool(epoch)
-        if hasattr(self, 'model_tag'):
-            g_name += f'_{self.model_tag}'
-            d_name += f'_{self.model_tag}'
+        if g_name is None:
+            g_name = f'Generator_{date.today().isoformat()}'\
+                + f'_epoch{epoch}'*bool(epoch)
+            if hasattr(self, 'model_tag'):
+                g_name += f'_{self.model_tag}'
+        if d_name is None:
+            d_name = f'Discriminator_{date.today().isoformat()}'\
+                + f'_epoch{epoch}'*bool(epoch)
+            if hasattr(self, 'model_tag'):
+                d_name += f'_{self.model_tag}'
 
         torch.save(self.gen_model.state_dict(), models_path / f'{g_name}.pt')
         if self.has_disc:
@@ -207,7 +209,7 @@ class Trainer:
             metric_table_name += f'_{self.model_tag}'
         self._save_metric_data(metric_table_name, epoch)
 
-    def _step_batch_mse(self, lr_img, hr_img):
+    def _step_batch_mse(self, lr_img, hr_img, *args):
         self.gen_model.zero_grad()
         sr_img = self.gen_model(lr_img)
         self.logger.debug(f'sr_img info: shape = {sr_img.shape}')
@@ -222,13 +224,13 @@ class Trainer:
             0,
         )
 
-    def _step_batch_gan(self, lr_img, hr_img):
+    def _step_batch_gan(self, lr_img, hr_img, hr_aug):
         sr_img = self.gen_model(lr_img)
         self.logger.debug(f'sr_img info: shape = {sr_img.shape}')
 
         self.disc_model.zero_grad()
 
-        real_out = self.disc_model(hr_img).mean()
+        real_out = self.disc_model(hr_aug).mean()
         fake_out = self.disc_model(sr_img).mean()
         self.logger.debug(f'real_out = {real_out}')
         self.logger.debug(f'fake_out = {fake_out}')
@@ -252,13 +254,13 @@ class Trainer:
             real_out.item(),
         )
 
-    def _step_batch_full(self, lr_img, hr_img):
+    def _step_batch_full(self, lr_img, hr_img, hr_aug):
         sr_img = self.gen_model(lr_img)
         self.logger.debug(f'sr_img info: shape = {sr_img.shape}')
 
         self.disc_model.zero_grad()
 
-        real_out = self.disc_model(hr_img).mean()
+        real_out = self.disc_model(hr_aug).mean()
         fake_out = self.disc_model(sr_img).mean()
         self.logger.debug(f'real_out = {real_out}')
         self.logger.debug(f'fake_out = {fake_out}')
@@ -298,15 +300,19 @@ class Trainer:
         i = 0
         for i, data in enumerate(loader):
             self.logger.debug(f'========= BATCH N{i} ==========')
-            lr_img, hr_img = data
+            lr_img, hr_img, hr_aug = data
+            hr_aug = Variable(hr_img).cuda()
             hr_img = Variable(hr_img).cuda()
             lr_img = Variable(lr_img).cuda()
+
             self.logger.debug(f'hr_img info: shape = {hr_img.shape}')
             self.logger.debug(f'lr_img info: shape = {lr_img.shape}')
+            self.logger.debug(f'hr_aug info: shape = {hr_aug.shape}')
 
             gen_loss, disc_loss, gen_score, disc_score = self._step_batch(
                 lr_img,
                 hr_img,
+                hr_aug,
             )
             gen_epoch_loss += gen_loss
             disc_epoch_loss += disc_loss
