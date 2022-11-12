@@ -4,7 +4,7 @@ from torchvision.models.resnet import ResNet50_Weights, resnet50
 
 
 class FullLoss(nn.Module):
-    def __init__(self, coeff_image=1, coeff_adv=0.01, coeff_perc=0.07):
+    def __init__(self, coeff_image=1, coeff_adv=0.01, coeff_perc=0.02):
         super().__init__()
         loss_network = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2).eval()
         for param in loss_network.parameters():
