@@ -37,7 +37,7 @@ def get_transformed_pair_plain(hr_img, crop_size):
     if hr_img.dtype == 'float32':
         hr_img *= 255  # or any coefficient
         hr_img = hr_img.astype(np.uint8)
-    return ToTensor()(lr_img), ToTensor()(hr_img)
+    return ToTensor()(lr_img), ToTensor()(hr_img), ToTensor()(hr_img)
 
 
 def get_transformed_pair_extended(hr_img, crop_size):
@@ -57,7 +57,7 @@ def get_transformed_pair_extended(hr_img, crop_size):
     if hr_img.dtype == 'float32':
         hr_img *= 255  # or any coefficient
         hr_img = hr_img.astype(np.uint8)
-    return ToTensor()(lr_img), ToTensor()(hr_img)
+    return ToTensor()(lr_img), ToTensor()(hr_img), ToTensor()(hr_img)
 
 
 def get_transformed_pair_photo(hr_img, crop_size):
@@ -74,13 +74,16 @@ def get_transformed_pair_photo(hr_img, crop_size):
     if lr_img.dtype == 'float32':
         lr_img *= 255  # or any coefficient
         lr_img = lr_img.astype(np.uint8)
+    hr_aug = A.ISONoise(p=0.5)(image=hr_img)
+    hr_aug = A.JpegCompression(50, 75, p=0.5)(image=hr_aug['image'])
+    hr_aug = hr_aug['image']
     lr_img = A.ISONoise(p=0.5)(image=lr_img)
-    lr_img = A.JpegCompression(40, 70, p=0.5)(image=lr_img['image'])
+    lr_img = A.JpegCompression(50, 75, p=0.5)(image=lr_img['image'])
     lr_img = lr_img['image']
     if hr_img.dtype == 'float32':
         hr_img *= 255  # or any coefficient
         hr_img = hr_img.astype(np.uint8)
-    return ToTensor()(lr_img), ToTensor()(hr_img)
+    return ToTensor()(lr_img), ToTensor()(hr_img), ToTensor()(hr_aug)
 
 
 def get_transformed_pair_game(hr_img, crop_size):
@@ -101,7 +104,7 @@ def get_transformed_pair_game(hr_img, crop_size):
     if hr_img.dtype == 'float32':
         hr_img *= 255  # or any coefficient
         hr_img = hr_img.astype(np.uint8)
-    return ToTensor()(lr_img), ToTensor()(hr_img)
+    return ToTensor()(lr_img), ToTensor()(hr_img), ToTensor()(hr_img)
 
 
 def get_transformed_pair_video(hr_img, crop_size):
@@ -125,7 +128,7 @@ def get_transformed_pair_video(hr_img, crop_size):
     if hr_img.dtype == 'float32':
         hr_img *= 255  # or any coefficient
         hr_img = hr_img.astype(np.uint8)
-    return ToTensor()(lr_img), ToTensor()(hr_img)
+    return ToTensor()(lr_img), ToTensor()(hr_img), ToTensor()(hr_img)
 
 
 def get_logging_handler():
@@ -139,7 +142,7 @@ def get_logging_handler():
 
 def display_transform():
     return Compose([
-        Resize(1080),
+        Resize(880),
         CenterCrop(600),
     ])
 
@@ -174,10 +177,10 @@ class TrainDatasetFromFolder(Dataset):
         if hr_image is None:
             raise FileNotFoundError(
                 f'cannot open hr image at path "{image_path}"')
-        lr_image, hr_image = self.pair_transform(
+        lr_image, hr_image, hr_augmented = self.pair_transform(
             hr_image,
             self.crop_size)
-        return lr_image, hr_image
+        return lr_image, hr_image, hr_augmented
 
     def __len__(self):
         return len(self.image_filenames)
