@@ -89,7 +89,6 @@ class ModelTester:
         for i, image in enumerate(imgs):
             if isinstance(image, str | Path):
                 title = Path(image).name
-                image = self.input_dir / image
                 imgs[i] = image
                 for suf in ['.png', '.jpg']:
                     title = title.removesuffix(suf)
@@ -173,7 +172,6 @@ class ModelTester:
                 f'Type of method input is {type(vid_path)},\
                   should be [str | pathlib.Path]')
         vid_path = Path(vid_path)
-        vid_path = self.input_dir / vid_path
 
         videoCapture = cv2.VideoCapture(str(vid_path))
         fps = videoCapture.get(cv2.CAP_PROP_FPS)
