@@ -10,18 +10,17 @@ from pathlib import Path
 import cv2
 import moviepy.editor as mpe
 import numpy as np
+import pytorch_ssim
 import torch
 import torchvision.transforms as transforms
 from alive_progress import alive_it
+from decorators import no_grad, timer
+from model import Generator
 # import torchvision.transforms as transforms
 from PIL import Image, ImageShow
 from torch.autograd import Variable
 from torchvision.transforms import (InterpolationMode, Resize, ToPILImage,
                                     ToTensor)
-
-import pytorch_ssim
-from decorators import no_grad, timer
-from model import Generator
 
 
 class ModelTester:
@@ -193,9 +192,12 @@ class ModelTester:
             self.compared_writer = None
 
         self.__save_audio_from_video(vid_path)
-        conversion_progress = alive_it(range(int(frame_numbers)))
+        conversion_progress = alive_it(range(int(frame_numbers)),
+                                       force_tty=True,
+                                       dual_line=True)
 
         for i in conversion_progress:
+            conversion_progress.text(vid_path.name)
             success, frame = videoCapture.read()
             if success:
                 image = Variable(ToTensor()(frame)).unsqueeze(0)
@@ -248,6 +250,7 @@ class ModelTester:
                -map 0:v -map 1:a -c:v copy -shortest \
                {self.root_dir}/{vid_path.stem}.mp4'
         subprocess.call(cmd, shell=True)
+        subprocess.call(f'rm -f {self.root_dir}/temp_audio.wav', shell=True)
 
     def sr_writer_builder(self, filename, fps):
         filename = filename + '.avi'
