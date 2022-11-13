@@ -24,7 +24,19 @@ from torchvision.transforms import (InterpolationMode, Resize, ToPILImage,
 
 
 class ModelTester:
+    """Класс для запуска моделей.
+
+    результаты будут сохраняться в test_output/
+    """
+
     def __init__(self, model_path, use_gpu=True, model_tag=None) -> None:
+        """
+        model_path - путь к файлу с моделью (state_dict)!!.
+
+        use_gpu - поставьте False если нет CUDA
+
+        model_tag - вставлять это в названия релевантных файлов
+        """
         self.logger = None
         self.use_gpu = use_gpu
         self.last_runtime = 0
@@ -83,6 +95,22 @@ class ModelTester:
                      hr_image: Image.Image | torch.Tensor | Path | str | None = None,
                      output_mode: str | bool = False, save_bicubic=False,
                      ) -> None:
+        """
+        Прогнать модель на изображении.
+
+        lr_image - путь или само изображение НИЗКОГО качества
+        (чтобы улучшить)
+
+        hr_image - путь или само изображение ВЫСОКОГО качества
+        (ухудшаем, потом улучшаем и смотрим метрики)
+
+        ! указывать только один аргумент из двух выше.
+
+        output_mode [str, bool] - режим вывода изображения:
+        одиночное или склееное с оригинальным ("upscale","comparison")
+
+        save_bicubic - также сохранить бикубически увеличенное изображение
+        """
         imgs = [lr_image, hr_image]
         title = 'Provided image'
         for i, image in enumerate(imgs):
@@ -113,6 +141,7 @@ class ModelTester:
         try:
             out_image = self.model(image)
         except RuntimeError as e:
+            # проверяем наличие CUDA Memory allocate error
             print(e)
             print('=====================================================')
             print(
@@ -123,7 +152,7 @@ class ModelTester:
         self.model_runtime = time.time() - start_time
 
         if isinstance(hr_image, torch.Tensor):
-            image_psnr, image_ssim = self.get_metrics(
+            image_psnr, image_ssim = self._get_metrics(
                 out_image, hr_image)
         else:
             image_psnr, image_ssim = None, None
@@ -163,6 +192,12 @@ class ModelTester:
     @timer
     @no_grad
     def run_on_video(self, vid_path: str | Path, video_type: str):
+        """
+        Прогнать видео через модель по кадрам
+        Занимает много времени! (2.5 часа за 20 минут 480p видео)
+        vid_path - путь к видео файлу
+        video_type - склеить видео для сравнения или нет ('upscale', 'comparison')
+        """
         if video_type not in ('upscale', 'comparison'):
             raise ValueError(
                 'please choose argument "video_type" from ("upscale", "comparison")')
@@ -182,12 +217,12 @@ class ModelTester:
         filename = vid_path.stem
         if video_type == 'upscale':
             filename = f'upscaled_{vid_path.stem}'
-            self.sr_writer = self.sr_writer_builder(filename, fps)
+            self.sr_writer = self._sr_writer_builder(filename, fps)
         else:
             self.sr_writer = None
         if video_type == 'comparison':
             filename = f'lr_vs_sr_for_{vid_path.stem}'
-            self.compared_writer = self.compared_writer_builder(filename, fps)
+            self.compared_writer = self._compared_writer_builder(filename, fps)
         else:
             self.compared_writer = None
 
@@ -212,8 +247,8 @@ class ModelTester:
                 if video_type == 'upscale':
                     self.sr_writer.write(sr_array)
                 if video_type == 'comparison':
-                    sr_img = self.compared_frame_assemble(sr_array, 'sr')
-                    lr_img = self.compared_frame_assemble(frame, 'lr')
+                    sr_img = self._compared_frame_assemble(sr_array, 'sr')
+                    lr_img = self._compared_frame_assemble(frame, 'lr')
                     final_image = np.concatenate(
                         (np.asarray(lr_img), np.asarray(sr_img)), axis=1)
                     self.compared_writer.write(final_image)
@@ -222,7 +257,7 @@ class ModelTester:
         vid_name = filename + '.avi'
         self.__insert_saved_audio(self.root_dir / vid_name)
 
-    def get_metrics(self, sr_image: torch.Tensor,
+    def _get_metrics(self, sr_image: torch.Tensor,
                     hr_image: torch.Tensor) -> tuple[float, float]:
         mse = torch.nn.functional.mse_loss(sr_image, hr_image)
         mse = mse.item()
@@ -252,19 +287,19 @@ class ModelTester:
         subprocess.call(cmd, shell=True)
         subprocess.call(f'rm -f {self.root_dir}/temp_audio.wav', shell=True)
 
-    def sr_writer_builder(self, filename, fps):
+    def _sr_writer_builder(self, filename, fps):
         filename = filename + '.avi'
         return cv2.VideoWriter(str(self.root_dir / filename),
                                cv2.VideoWriter_fourcc(*'MPEG'), fps, self.sr_video_size)
 
-    def compared_writer_builder(self, filename, fps):
+    def _compared_writer_builder(self, filename, fps):
         filename = filename + '.avi'
         compared_video_size = (
             int(self.sr_video_size[0] * 2 + 10), int(self.sr_video_size[1] * 2))
         return cv2.VideoWriter(str(self.root_dir / filename),
                                cv2.VideoWriter_fourcc(*'MPEG'), fps, compared_video_size)
 
-    def compared_frame_assemble(self, frame: np.ndarray, frame_type: str):
+    def _compared_frame_assemble(self, frame: np.ndarray, frame_type: str):
         frame = ToPILImage()(frame)
         if frame_type == 'lr':
             frame = transforms.Resize(
@@ -273,21 +308,3 @@ class ModelTester:
             return transforms.Pad(padding=(0, 0, 5, 5))(frame)
         if frame_type == 'sr':
             return transforms.Pad(padding=(5, 0, 0, 5))(frame)
-
-
-if __name__ == '__main__':
-    tree_image = 'tree.png'
-    vegetaples_image = 'vegatables.png'
-    sky_image = 'skyscraper.png'
-    laptop_image = 'laptop.png'
-    mse_model = '/run/media/dvarkless/LinuxData/Files/Учеба/Data_Science_Course/SRGAN/models/favorites/mse_vs_gan_vs_full/mse_only_120.pt'
-    gan_model = '/run/media/dvarkless/LinuxData/Files/Учеба/Data_Science_Course/SRGAN/models/favorites/mse_vs_gan_vs_full/gan_only_120.pt'
-    full_model = '/run/media/dvarkless/LinuxData/Files/Учеба/Data_Science_Course/SRGAN/models/favorites/augmentations_full/Generator_2022-11-06_epoch220_photo.pt'
-    model_names = ['mse', 'gan', 'full']
-    models = [mse_model, gan_model, full_model]
-    images = [tree_image, vegetaples_image, sky_image, laptop_image]
-    for name, model_path in zip(model_names, models):
-        tester = ModelTester(model_path, model_tag=name)
-        for image_path in images:
-            tester.run_on_image(hr_image=image_path, save_bicubic=True)
-    print('Done!')

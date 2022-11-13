@@ -23,6 +23,8 @@ shutup.please()
 
 
 class Trainer:
+    """Класс для тренировки модели SRGAN."""
+
     __model_types = ['mse', 'gan', 'full']
     __loss_types = {'mse': MSELoss,
                     'gan': AdversarialLoss,
@@ -33,8 +35,45 @@ class Trainer:
                  gen_optimizer_params=None, disc_optimizer_params=None,
                  verbose_logs=False, gen_model_name=None,
                  disc_model_name=None, model_type='full',
-                 save_interval=10, loss_coeffs=None, 
-                 colab=False) -> None:
+                 save_interval=10, loss_coeffs=None,
+                 colab=True) -> None:
+        """
+    crop_size - размер вырезаемого при обучении окна из изображения.
+    Влияет на занимаемую память при обучении.
+
+    epochs - количество эпох обучения
+
+    gen_optimizer - класс оптимизатора генератора из PyTorch
+    по умолчанию - Adam
+
+    disc_optimizer - класс оптимизатора генератора из PyTorch
+    по умолчанию - Adam
+
+    gen_optimizer_params - параметры для передачи в инициализируемый
+    класс оптимизатора генератора
+
+    disc_optimizer_params - параметры для передачи в инициализируемый
+    класс оптимизатора дискриминатора
+
+    verbose_logs - не используется и не будет использоваться, как
+    я полагаю
+
+    gen_model_name - задать имя генератора при сохранении, полезно
+    при автоматизации
+
+    disc_model_name - задать имя дискриминатора при сохранении, полезно
+    при автоматизации
+
+    model_type - тип модели - только с метрикой mse, только с метрикой gan,
+    полная ("mse", "gan", "full")
+
+    save_interval - интервал сохранения модели в эпохах
+
+    loss_coeffs: Tuple[float, float, float] - коэффициенты функций потерь:
+    MSE, GAN, ResNet50 (1, 0.01, 0.05)
+
+    colab: Bool - поставьте False если запускаете в колабе
+        """
 
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG if verbose_logs else logging.INFO)
@@ -123,6 +162,23 @@ class Trainer:
     def fit(self, train_hr_dir, eval_hr_dir, batch_size=32,
             data_augmentation_type='plain', model_tag=None,
             save_g_as=None, save_d_as=None):
+        """
+           Запуск обучения.
+
+           train_hr_dir - путь к тренировочному датасету
+
+           eval_hr_dir - путь к проверочному датасету
+
+           batch_size - размер выборки
+
+           data_augmentation_type - тип аугментаций изображении
+
+           model_tag - вставлять это в названия релевантных файлов
+
+           save_g_as - имя генератора при сохранении
+
+           save_d_as - имя дискриминатора при сохранении
+        """
         if model_tag:
             self.model_tag = model_tag
         train_hr_dir = Path(train_hr_dir)
@@ -399,6 +455,11 @@ class Trainer:
         data_frame.to_csv(out_path / f'{name}.csv', index_label='Epoch')
 
     def get_metric_list(self, metric_name):
+        """
+        Получить список с метрикой обучения.
+
+        metric_name - имя метрики
+        """
         out_data = []
         if not (metric_name in self.trainer_results[0].keys()):
             msg = f'Wrong metric name: "{metric_name}"'
