@@ -33,7 +33,8 @@ class Trainer:
                  gen_optimizer_params=None, disc_optimizer_params=None,
                  verbose_logs=False, gen_model_name=None,
                  disc_model_name=None, model_type='full',
-                 save_interval=10, loss_coeffs=None) -> None:
+                 save_interval=10, loss_coeffs=None, 
+                 colab=False) -> None:
 
         self.logger = logging.getLogger(__name__)
         self.logger.setLevel(logging.DEBUG if verbose_logs else logging.INFO)
@@ -52,6 +53,7 @@ class Trainer:
         self.has_disc = True if self.model_type != 'mse' else False
 
         self.save_interval = save_interval
+        self.colab = colab
 
         self.gen_model = Generator()
         self.disc_model = Discriminator()
@@ -136,7 +138,7 @@ class Trainer:
             dataset=eval_set, num_workers=4, batch_size=1, shuffle=False)
 
         bar = alive_it(range(self.epochs), self.epochs,
-                       calibrate=0.5, force_tty=True,
+                       calibrate=0.5, force_tty=self.colab,
                        dual_line=True)
         epoch = 0
         for epoch in bar:
