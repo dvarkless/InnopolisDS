@@ -61,6 +61,9 @@ class PlotProcessor:
 
         plt.show()
 
+    def get_last_vals(self):
+        return self.data.iloc[-1]
+
 
 if __name__ == '__main__':
     stats_mse = '/run/media/dvarkless/LinuxData/Files/Учеба/Data_Science_Course/SRGAN/statistics/models_full/Training_metrics_2022-11-09_mse.csv'
