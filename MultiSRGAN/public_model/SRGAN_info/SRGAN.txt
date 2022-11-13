@@ -1,0 +1,11 @@
+SRGAN
+MSE = 0.0025
+PSNR = 26.478db
+SSIM = 0.811
+Generator score = (0.054)
+Discriminator score = (0.947)
+
+картинки:
+skyscraper - psnr = 55.10db, ssim = 0.69
+bird - psnr = 67.84db, ssim = 0.87
+girl_noise - psnr = 63.37db, ssim = 0.71
