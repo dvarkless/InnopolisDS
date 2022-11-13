@@ -16,3 +16,24 @@
 │   ├── datasets            # датасеты
 
 ```
+
+### SRGAN
+Для запуска установите пакеты:
+```
+numpy
+pytorch
+opencv-python
+albumentations
+pandas
+matplotlib
+seaborn
+```
+
+Пример запуска есть в файле srgan_project.ipynb
+
+### Summer-finals
+Необходимые библиотеки:
+```
+numpy
+scikit-learn (для метрик)
+```
